@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "author": "Alex Fitterling",
   "scripts": {
     "setup": "sst install",
     "dev": "sst dev",
