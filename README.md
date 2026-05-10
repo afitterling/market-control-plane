@@ -81,9 +81,9 @@ The stack runs three EventBridge-driven background jobs out of the box:
 
 | Job | Cadence | What it does |
 | --- | --- | --- |
-| `ProcessStock` (async Lambda) | On first `POST /stocks` for a symbol | Pulls all annual + quarterly earnings from FMP into the `Earnings` table, then computes MACD across eight timeframes. Transitions the stock through `being_processed` → `data_pulled`. |
-| `PullPrices` | Every 30 s (1 min cron, 2 passes per invocation) | Fetches FMP real-time quotes and writes `price`, `dailyChange`, `dailyChangePercent` (and OHLC + volume) onto every `Stocks` row. |
-| `PullMacd` | Every 15 min | Recomputes MACD(12,26,9) on `5m`, `20m`, `30m`, `1h`, `2h`, `4h`, `1d`, `1w` for every stock and categorises each reading (`strong_bullish` … `strong_bearish`). |
+| `ProcessStock` (async Lambda) | On first `POST /stocks` for a symbol | Runs the **fundamentals** pipeline: pulls all annual + quarterly **income statements and cash flow statements** from FMP, computes margins (gross/operating/net), free-cash-flow metrics, period-over-period deltas, and a deterministic narrative for every period, and writes them to the `Earnings` table. Also delegates the initial MACD seed to the prices/technicals pipeline so technicals exist on entry. Transitions the stock through `being_processed` → `data_pulled`. |
+| `PullPrices` | Every 30 s (1 min cron, 2 passes per invocation) | Part of the **prices / technicals** pipeline. Fetches FMP real-time quotes and writes `price`, `dailyChange`, `dailyChangePercent` (and OHLC + volume) onto every `Stocks` row. |
+| `PullMacd` | Every 15 min | Part of the **prices / technicals** pipeline. Recomputes MACD(12,26,9) on `5m`, `20m`, `30m`, `1h`, `2h`, `4h`, `1d`, `1w` for every stock and categorises each reading (`strong_bullish` … `strong_bearish`). |
 | `EvaluateAlerts` | Every 30 min, US market sessions only | Evaluates user-defined rules stored in the `SignalAlerts` table during premarket (04:00–09:30 ET), regular (09:30–16:00) and afterhours (16:00–20:00). Ticks outside session windows are skipped. |
 | `PullPulse` | Every 20 min | Polls FMP news, extracts regions + themes per article, scores criticality/severity, writes a per-region row to `MarketPulse` with the source article links. Regions with no fresh news for 4+ hours are flagged `stale`. |
 

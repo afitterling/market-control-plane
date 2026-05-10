@@ -145,11 +145,29 @@ Example response:
       "epsDiluted": 1.53,
       "source": "fmp",
       "fetchedAt": "2026-05-11T08:32:10.481Z",
-      "raw": { "...": "..." }
+      "analysis": {
+        "grossMargin": 0.432,
+        "operatingMargin": 0.315,
+        "netMargin": 0.247,
+        "freeCashFlow": 28611000000,
+        "operatingCashFlow": 31200000000,
+        "capitalExpenditure": -2589000000,
+        "fcfMargin": 0.315,
+        "fcfConversion": 1.211,
+        "revenueGrowth": 0.049,
+        "netIncomeGrowth": 0.052,
+        "epsGrowth": 0.061,
+        "grossMarginDelta": 0.011,
+        "operatingMarginDelta": 0.014,
+        "narrative": "Revenue up 4.9% YoY; operating margin expanding to 31.5%, FCF conversion strong at 121.1%, EPS +6.1% YoY."
+      },
+      "raw": { "income": { "...": "..." }, "cashFlow": { "...": "..." } }
     }
   ]
 }
 ```
+
+Each row carries an `analysis` block with margins (gross/operating/net), free-cash-flow metrics (FCF, operating CF, capex, FCF margin, FCF conversion), period-over-period growth/deltas, and a one-sentence deterministic narrative. The latest of these is also denormalised onto the `Stocks` row under `latestEarningsAnalysis`. See [`signals.md`](./signals.md#fundamentals-pipeline) for the full schema.
 
 ## MACD
 

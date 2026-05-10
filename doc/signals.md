@@ -29,13 +29,28 @@ Fired immediately after `STCO_NEW_ADDED` in the same POST request. The stock row
 
 ### `STCO_DATA_PULLED`
 
-Fired by the `ProcessStock` Lambda once it has fetched all annual and quarterly income statements from Financial Modeling Prep, written them to the `Earnings` table (one row per `symbol#period`), and updated the stock row with:
+Fired by the `ProcessStock` Lambda once it has fetched all annual and quarterly **income statements** and **cash flow statements** from Financial Modeling Prep, written one analysed row per `symbol#period` into the `Earnings` table (including margins, FCF metrics, period-over-period deltas, and a generated narrative — see [Fundamentals pipeline](#fundamentals-pipeline) below), and updated the stock row with:
 
 - `processingState = "data_pulled"`
 - `dataPulledAt` — ISO timestamp of completion
 - `annualReportCount`, `quarterlyReportCount`
+- `latestEarningsAnalysis` — the most recent quarterly (or annual fallback) analysis block including the narrative
+
+The payload now also carries the latest narrative for convenience:
+
+```json
+{
+  "action": "STCO_DATA_PULLED",
+  "symbol": "AAPL",
+  "annualCount": 24,
+  "quarterlyCount": 92,
+  "latestNarrative": "Revenue up 4.9% YoY; operating margin expanding to 31.0%, FCF conversion strong at 107.0%."
+}
+```
 
 Clients that long-polled on the `STCO_PROCESS_STOCK` eventId will keep polling and receive this event when the backfill finishes.
+
+Note: the on-enter MACD seed is delegated by the same orchestrator but conceptually belongs to the [Prices + MACD pipeline](#macd-pipeline) — it just runs synchronously inside `ProcessStock` so a freshly entered stock has technicals ready before `STCO_DATA_PULLED` fires.
 
 ### `STCO_PROCESS_FAILED`
 
@@ -193,9 +208,54 @@ Outside those windows (overnight gap 20:00–04:00, and all of Saturday/Sunday) 
 
 For every rule that matches in the current session, the evaluator emits `SIGN_ALERT_RAISED` with `{ alertId, name, session, matchedSymbols?, detail? }`. Downstream consumers subscribe through `GET /events` like any other signal.
 
+## Fundamentals pipeline
+
+The earnings backfill is part of the **fundamentals** pipeline — it ingests income and cash flow statements and produces a per-period analysis with margins, free-cash-flow metrics, period-over-period deltas, and a deterministic narrative.
+
+### Data sources
+
+For every newly entered stock, `ProcessStock` fetches in parallel:
+
+- `GET /api/v3/income-statement/{symbol}?period=annual`
+- `GET /api/v3/income-statement/{symbol}?period=quarter`
+- `GET /api/v3/cash-flow-statement/{symbol}?period=annual`
+- `GET /api/v3/cash-flow-statement/{symbol}?period=quarter`
+
+Income and cash-flow rows are joined by report date, sorted newest-first, and each period is compared against its immediately prior same-kind period to derive deltas.
+
+### Per-period analysis block
+
+Every `Earnings` row carries an `analysis` block:
+
+```json
+{
+  "grossMargin": 0.432,
+  "operatingMargin": 0.315,
+  "netMargin": 0.247,
+  "freeCashFlow": 28611000000,
+  "operatingCashFlow": 31200000000,
+  "capitalExpenditure": -2589000000,
+  "fcfMargin": 0.315,
+  "fcfConversion": 1.211,
+  "revenueGrowth": 0.049,
+  "netIncomeGrowth": 0.052,
+  "epsGrowth": 0.061,
+  "grossMarginDelta": 0.011,
+  "operatingMarginDelta": 0.014,
+  "narrative": "Revenue up 4.9% YoY; operating margin expanding to 31.5%, FCF conversion strong at 121.1%, EPS +6.1% YoY."
+}
+```
+
+- **Margins** are ratios (`grossProfit / revenue`, `operatingIncome / revenue`, `netIncome / revenue`).
+- **Cash flow** captures the raw values plus two derived ratios: `fcfMargin` (FCF / revenue) and `fcfConversion` (FCF / netIncome).
+- **Growth and deltas** are computed against the previous same-kind period (YoY for annual rows, QoQ for quarterly).
+- **Narrative** is a one-sentence summary derived deterministically from the deltas. The framing is intentionally stable so downstream consumers can pattern-match (`stable`, `expanding`, `compressing`, `strong`, `healthy`, `weak`, `negative`). The plan documented in [`README.md`](../README.md#4-ai-models) is to swap the deterministic narrator for the FAU-pruned scoring model behind the same interface.
+
+The latest analysis block (most recent quarterly, falling back to annual) is also denormalised onto the `Stocks` row under `latestEarningsAnalysis` so callers can read margins, FCF, and the narrative without scanning `Earnings`.
+
 ## MACD pipeline
 
-For each stock, MACD(12,26,9) is computed across eight timeframes and stored on the `Stocks` row under `macd`:
+MACD is part of the **prices / technicals** pipeline, alongside the 30-second `PullPrices` real-time quote refresh. For each stock, MACD(12,26,9) is computed across eight timeframes and stored on the `Stocks` row under `macd`:
 
 | Timeframe | FMP source | Aggregation |
 | --- | --- | --- |
@@ -240,7 +300,7 @@ Quality is derived from the relationship between MACD, signal, histogram, and th
 
 The MACD readings are refreshed in two ways:
 
-1. **On stock entry.** The `ProcessStock` Lambda calls `processMacd` after the earnings backfill completes, so a freshly entered stock has a full set of MACD readings as soon as `STCO_DATA_PULLED` fires.
+1. **On stock entry (seed).** When a stock is first added, the `ProcessStock` orchestrator delegates an initial MACD computation to `processMacd` so technicals exist before `STCO_DATA_PULLED` fires. This seed belongs to the prices/technicals pipeline — the orchestrator just runs it synchronously to keep the on-enter flow single-eventid for clients.
 2. **15-minute cron.** The `PullMacd` EventBridge cron runs every 15 minutes, scans the `Stocks` table, and recomputes the MACD readings for every symbol with bounded concurrency (4 symbols in flight at a time).
 
 ## Real-time prices
