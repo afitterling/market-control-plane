@@ -16,23 +16,9 @@ API_BEARER_TOKEN=...
 
 SST passes this value into every Lambda route as the `API_BEARER_TOKEN` environment variable.
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Api as API Gateway
-    participant Lambda
-    participant Env as API_BEARER_TOKEN
+![Bearer token authentication flow](diagrams/auth-bearer.svg)
 
-    Client->>Api: Request with Authorization header
-    Api->>Lambda: Forward request
-    Lambda->>Env: Read expected token
-    Lambda->>Lambda: Compare Bearer token
-    alt Token valid
-        Lambda-->>Client: Continue handler
-    else Token missing or invalid
-        Lambda-->>Client: 401 Unauthorized
-    end
-```
+Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 
 ## Routes
 

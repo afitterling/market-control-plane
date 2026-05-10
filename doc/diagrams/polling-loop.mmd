@@ -1,0 +1,16 @@
+%% rendered: ./polling-loop.svg
+%% regenerate: mmdc -i polling-loop.mmd -o polling-loop.svg -b transparent
+sequenceDiagram
+    participant Client
+    participant Events as GET /events
+
+    Client->>Events: GET /events?from=<eventId>&waitSeconds=25
+    Events-->>Client: { events, nextCursor }
+    loop until shutdown
+        Client->>Events: GET /events?after=<nextCursor>&waitSeconds=25
+        alt event available
+            Events-->>Client: { events, nextCursor }
+        else timeout
+            Events-->>Client: { events: [], nextCursor }
+        end
+    end

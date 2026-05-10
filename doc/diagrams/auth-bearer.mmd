@@ -1,0 +1,17 @@
+%% rendered: ./auth-bearer.svg
+%% regenerate: mmdc -i auth-bearer.mmd -o auth-bearer.svg -b transparent
+sequenceDiagram
+    participant Client
+    participant Api as API Gateway
+    participant Lambda
+    participant Env as API_BEARER_TOKEN
+
+    Client->>Api: Request with Authorization header
+    Api->>Lambda: Forward request
+    Lambda->>Env: Read expected token
+    Lambda->>Lambda: Compare Bearer token
+    alt Token valid
+        Lambda-->>Client: Continue handler
+    else Token missing or invalid
+        Lambda-->>Client: 401 Unauthorized
+    end

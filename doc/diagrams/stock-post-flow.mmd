@@ -1,0 +1,26 @@
+%% rendered: ./stock-post-flow.svg
+%% regenerate: mmdc -i stock-post-flow.mmd -o stock-post-flow.svg -b transparent
+sequenceDiagram
+    participant Client
+    participant Lambda as POST /stocks
+    participant Stocks as DynamoDB Stocks
+    participant Events as DynamoDB Events
+    participant Stream as GET /events
+
+    Client->>Lambda: POST /stocks { symbol }
+    Lambda->>Stocks: GetItem(symbol)
+    alt Cache hit
+        Stocks-->>Lambda: existing row + executedActions
+        Lambda-->>Client: 200 { stock, executedActions, subscribe, cached: true }
+    else Cache miss
+        Stocks-->>Lambda: (not found)
+        Lambda->>Events: PutItem(STCO_NEW_ADDED)
+        Events-->>Lambda: eventId
+        Lambda->>Stocks: PutItem(row + executedActions)
+        Lambda-->>Client: 201 { stock, executedActions, subscribe, cached: false }
+        Note over Client: Client follows subscribe.pollUrl
+        Client->>Stream: GET /events?from=<eventId>&waitSeconds=25
+        Stream->>Events: Query streamId, eventId >= from
+        Events-->>Stream: [STCO_NEW_ADDED, ...]
+        Stream-->>Client: { events: [...], nextCursor }
+    end

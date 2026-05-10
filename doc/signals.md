@@ -23,32 +23,9 @@ The eventId of the emission is persisted on the stock row under `executedActions
 - **Cache miss** (symbol not present) → write row, emit `STCO_NEW_ADDED`, return `201` with the new row, the executed actions, and a `subscribe` block pointing at the event stream.
 - **Cache hit** (symbol already present) → return `200` with the cached row and the executed actions that were recorded on the original insert. No write, no re-emission.
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Lambda as POST /stocks
-    participant Stocks as DynamoDB Stocks
-    participant Events as DynamoDB Events
-    participant Stream as GET /events
+![Stock POST cache and emission flow](diagrams/stock-post-flow.svg)
 
-    Client->>Lambda: POST /stocks { symbol }
-    Lambda->>Stocks: GetItem(symbol)
-    alt Cache hit
-        Stocks-->>Lambda: existing row + executedActions
-        Lambda-->>Client: 200 { stock, executedActions, subscribe, cached: true }
-    else Cache miss
-        Stocks-->>Lambda: (not found)
-        Lambda->>Events: PutItem(STCO_NEW_ADDED)
-        Events-->>Lambda: eventId
-        Lambda->>Stocks: PutItem(row + executedActions)
-        Lambda-->>Client: 201 { stock, executedActions, subscribe, cached: false }
-        Note over Client: Client follows subscribe.pollUrl
-        Client->>Stream: GET /events?from=<eventId>&waitSeconds=25
-        Stream->>Events: Query streamId, eventId >= from
-        Events-->>Stream: [STCO_NEW_ADDED, ...]
-        Stream-->>Client: { events: [...], nextCursor }
-    end
-```
+Source: [diagrams/stock-post-flow.mmd](diagrams/stock-post-flow.mmd)
 
 ## Subscribing to signals
 
@@ -73,22 +50,9 @@ API Gateway HTTP API does not stream responses to clients, so a true Server-Sent
 
 ### Polling loop
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Events as GET /events
+![Event polling loop](diagrams/polling-loop.svg)
 
-    Client->>Events: GET /events?from=<eventId>&waitSeconds=25
-    Events-->>Client: { events, nextCursor }
-    loop until shutdown
-        Client->>Events: GET /events?after=<nextCursor>&waitSeconds=25
-        alt event available
-            Events-->>Client: { events, nextCursor }
-        else timeout
-            Events-->>Client: { events: [], nextCursor }
-        end
-    end
-```
+Source: [diagrams/polling-loop.mmd](diagrams/polling-loop.mmd)
 
 ## Cursor parameters
 
