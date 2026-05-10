@@ -1,0 +1,18 @@
+import "sst";
+
+declare module "sst" {
+  export interface Resource {
+    Stocks: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
+    Positions: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
+    Events: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
+  }
+}

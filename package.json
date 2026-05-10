@@ -1,0 +1,23 @@
+{
+  "name": "market-control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "sst install",
+    "dev": "sst dev",
+    "deploy": "sst deploy",
+    "remove": "sst remove",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.808.0",
+    "@aws-sdk/lib-dynamodb": "^3.808.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^22.15.17",
+    "sst": "^3.19.3",
+    "typescript": "^5.8.3"
+  }
+}
