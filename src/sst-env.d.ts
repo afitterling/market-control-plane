@@ -18,6 +18,10 @@ declare module "sst" {
       name: string;
       type: "sst.aws.Dynamo";
     };
+    SignalAlerts: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
     ProcessStock: {
       name: string;
       type: "sst.aws.Function";

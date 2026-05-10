@@ -29,6 +29,16 @@ declare module "sst" {
     "PullPrices": {
       "type": "sst.aws.Cron"
     }
+    "PullMacd": {
+      "type": "sst.aws.Cron"
+    }
+    "EvaluateAlerts": {
+      "type": "sst.aws.Cron"
+    }
+    "SignalAlerts": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "Stocks": {
       "name": string
       "type": "sst.aws.Dynamo"

@@ -12,6 +12,8 @@ Signals are fire-and-record: the emitting handler writes the event row synchrono
 | `STCO_PROCESS_STOCK` | `POST /stocks`, `POST /stocks/batch` | Fired in the same request as `STCO_NEW_ADDED`. Marks the stock as `processingState="being_processed"` and asynchronously invokes the `ProcessStock` Lambda. | `{ action: "STCO_PROCESS_STOCK", symbol }` |
 | `STCO_DATA_PULLED` | `ProcessStock` Lambda | The processor finished fetching all annual + quarterly earnings from FMP and stored them in the `Earnings` table. Stock row flips to `processingState="data_pulled"`. | `{ action: "STCO_DATA_PULLED", symbol, annualCount, quarterlyCount }` |
 | `STCO_PROCESS_FAILED` | `ProcessStock` Lambda | The processor failed (FMP error, missing API key, etc). Stock row flips to `processingState="process_failed"` with `processingError` set. | `{ action: "STCO_PROCESS_FAILED", symbol, error }` |
+| `SIGN_ALERT_RAISED` | `EvaluateAlerts` cron | An enabled `SignalAlerts` rule matched during a market session. | `{ action: "SIGN_ALERT_RAISED", alertId, name, session, matchedSymbols?, detail? }` |
+| `SIGN_ALERT_TICK_SKIPPED` | `EvaluateAlerts` cron | The evaluator tick fired outside any market session and was skipped. | `{ action: "SIGN_ALERT_TICK_SKIPPED", reason: "market_closed", at }` |
 
 ### `STCO_NEW_ADDED`
 
@@ -104,6 +106,40 @@ The `Earnings` DynamoDB table is keyed by `(symbol, period)` where `period` is o
 - `QUARTER#<reportDate>` — quarterly income statement
 
 Each row contains the canonical line items extracted from the FMP income statement (`revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `eps`, `epsDiluted`, `reportedCurrency`, `fiscalPeriod`, `calendarYear`), plus the full FMP payload under `raw` and a `fetchedAt` timestamp. Read via `GET /earnings/{symbol}`.
+
+## Signal alerts
+
+User-defined rules live in the `SignalAlerts` DynamoDB table and are evaluated by the `EvaluateAlerts` cron every 30 minutes — but **only during US market sessions** (in `America/New_York` time, Mon-Fri):
+
+| Session | Window (ET) |
+| --- | --- |
+| `premarket` | 04:00 – 09:30 |
+| `regular` | 09:30 – 16:00 |
+| `afterhours` | 16:00 – 20:00 |
+
+Outside those windows (overnight gap 20:00–04:00, and all of Saturday/Sunday) the cron fires but emits a `SIGN_ALERT_TICK_SKIPPED` event and does no work. Public-holiday closures are not yet modelled — alerts will still evaluate on US market holidays.
+
+### Alert row shape
+
+```json
+{
+  "alertId": "a3a0f4c2-…",
+  "name": "AAPL gap up > 2% premarket",
+  "description": "Free-text explanation shown alongside the raised alert.",
+  "enabled": true,
+  "sessions": ["premarket", "regular"],
+  "scope":    { "symbols": ["AAPL"] },
+  "condition": { "...": "TBD — rule body shape is intentionally open" },
+  "createdAt": "2026-05-11T08:00:00.000Z",
+  "updatedAt": "2026-05-11T08:00:00.000Z"
+}
+```
+
+`condition` is intentionally typed as `unknown` for now — the rule grammar (price thresholds, MACD-quality predicates, fundamental triggers, multi-condition AND/OR) is yet to be defined. The evaluator currently treats every rule with a non-empty `condition` as a stub (no match), so rolling out a rule grammar is a pure addition without breaking the storage or signal contract.
+
+### What gets emitted
+
+For every rule that matches in the current session, the evaluator emits `SIGN_ALERT_RAISED` with `{ alertId, name, session, matchedSymbols?, detail? }`. Downstream consumers subscribe through `GET /events` like any other signal.
 
 ## MACD pipeline
 

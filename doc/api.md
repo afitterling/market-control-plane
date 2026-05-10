@@ -31,6 +31,10 @@ Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 | `POST` | `/stocks` | Cache-or-create one stock (idempotent) |
 | `POST` | `/stocks/batch` | Cache-or-create stocks in batches |
 | `GET` | `/earnings/{symbol}` | List earnings reports for a symbol (annual + quarterly) |
+| `GET` | `/alerts` | List signal-alert rules |
+| `GET` | `/alerts/{alertId}` | Get one signal-alert rule |
+| `POST` | `/alerts` | Create a signal-alert rule |
+| `DELETE` | `/alerts/{alertId}` | Delete a signal-alert rule |
 | `GET` | `/positions` | List positions |
 | `GET` | `/positions?accountId={accountId}` | List positions for one account |
 | `GET` | `/positions/{accountId}/{symbol}` | Get one position |
@@ -169,6 +173,28 @@ Each `Stocks` row carries a `macd` field with readings for `5m`, `20m`, `30m`, `
 ```
 
 Readings are computed (a) on stock entry by `ProcessStock` and (b) every 15 minutes by the `PullMacd` cron. See [`signals.md`](./signals.md#macd-pipeline) for the timeframe sourcing, aggregation rules, and quality categories.
+
+## Signal alerts
+
+Create a signal-alert rule:
+
+```sh
+curl -X POST "$API_URL/alerts" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{
+    "name": "AAPL gap up > 2% premarket",
+    "sessions": ["premarket"],
+    "scope": { "symbols": ["AAPL"] },
+    "condition": { "kind": "TBD" }
+  }'
+```
+
+- `sessions` must be a non-empty subset of `["premarket", "regular", "afterhours"]`. The `EvaluateAlerts` cron runs every 30 minutes and only evaluates rules whose `sessions` include the current US market session.
+- `condition` is intentionally typed as free-form `unknown` for now. The rule grammar is yet to be defined; the evaluator currently treats every rule as a stub (no match) until rule kinds are introduced.
+- Set `enabled: false` to keep a rule in the table but stop evaluating it.
+
+See [`signals.md`](./signals.md#signal-alerts) for the session windows, `SIGN_ALERT_RAISED` payload, and the `SIGN_ALERT_TICK_SKIPPED` heartbeat fired when the cron runs outside market hours.
 
 ## Real-time prices
 

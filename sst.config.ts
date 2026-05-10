@@ -51,6 +51,15 @@ export default $config({
       }
     });
 
+    const signalAlerts = new sst.aws.Dynamo("SignalAlerts", {
+      fields: {
+        alertId: "string"
+      },
+      primaryIndex: {
+        hashKey: "alertId"
+      }
+    });
+
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
       link: [stocks, earnings, events],
@@ -85,8 +94,17 @@ export default $config({
       }
     });
 
+    new sst.aws.Cron("EvaluateAlerts", {
+      schedule: "rate(30 minutes)",
+      function: {
+        handler: "src/alertsEvaluator.evaluateAlerts",
+        link: [stocks, signalAlerts, events],
+        timeout: "2 minutes"
+      }
+    });
+
     const api = new sst.aws.ApiGatewayV2("Api", {
-      link: [stocks, positions, events, earnings, processStock],
+      link: [stocks, positions, events, earnings, signalAlerts, processStock],
       transform: {
         route: {
           handler: {
@@ -109,6 +127,11 @@ export default $config({
 
     api.route("GET /earnings/{symbol}", "src/earnings.list");
 
+    api.route("GET /alerts", "src/alerts.list");
+    api.route("GET /alerts/{alertId}", "src/alerts.get");
+    api.route("POST /alerts", "src/alerts.create");
+    api.route("DELETE /alerts/{alertId}", "src/alerts.remove");
+
     api.route("GET /positions", "src/positions.list");
     api.route("GET /positions/{accountId}/{symbol}", "src/positions.get");
     api.route("POST /positions", "src/positions.create");
@@ -119,6 +142,7 @@ export default $config({
       positionsTable: positions.name,
       eventsTable: events.name,
       earningsTable: earnings.name,
+      signalAlertsTable: signalAlerts.name,
       processStockFunction: processStock.name
     };
   }
