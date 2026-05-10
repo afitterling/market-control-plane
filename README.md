@@ -42,6 +42,25 @@ The system reads the Financial Modeling Prep news feed on a 20-minute cadence an
 
 Notable shifts in the pulse — for an issuer, a sector, or the broader tape — are emitted as signals on the event stream so the regime detector and allocation engine can react inside the same 20-minute window.
 
+## 4. AI Models
+
+The classifiers, scorers, and pulse aggregators run on **pruned models curated by AI experts at Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU)**. Rather than training from scratch or paying for full-size foundation-model inference, the control plane consumes pruned variants as drop-in inference artifacts.
+
+Pruning removes the weights and substructures that contribute least to a given task, producing models that are:
+
+- **faster** — lower inference latency, which makes the 20-minute pulse cadence and per-filing scoring feasible at scale
+- **lightweight** — typically a 5–20× parameter reduction over the source model, with a correspondingly smaller memory footprint and shorter Lambda cold starts
+- **less prone to hallucination** — removing the parameters that encode broad off-task associations narrows the model to its in-domain behaviour, so outputs stay closer to the calibration data and away from fabricated content
+- **accuracy-comparable** to the unpruned baseline on the in-domain tasks they are tuned for
+
+The FAU workflow handles calibration-data selection, layer-wise sensitivity analysis, and post-prune fine-tuning, so this repository only needs to ship the model artifact and an inference adapter. The current pruned-model surface covers:
+
+| Task | Model role |
+| --- | --- |
+| News understanding | Headline embedding, sentiment, named-entity linking for the market-pulse pipeline. |
+| Fundamentals scoring | Tabular/structured-data model that produces the qualification scores from extracted filing line items. |
+| Regime classification | Time-series classifier that ingests cross-asset features and emits regime labels. |
+
 ## Architecture (current scope)
 
 This repository is the first slice of the control plane: an SST v3 API on AWS that stores reference data (stocks, positions) in DynamoDB and emits domain signals through an append-only event stream. See [`doc/signals.md`](doc/signals.md) for the signal catalogue and sequence diagrams, and [`doc/api.md`](doc/api.md) for full route documentation.
