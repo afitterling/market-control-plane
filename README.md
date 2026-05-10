@@ -11,7 +11,7 @@ The system:
 
 The control plane is the policy and signal layer: it ingests market and fundamental data, classifies the current regime, scores instruments, and emits allocation signals that execution venues consume. Trading platforms remain responsible for order routing and execution; the control plane decides *what* should be held and *why*.
 
-## 📊 1. Market Regime Detection Capabilities
+## 1. Market Regime Detection Capabilities
 
 The system can detect:
 
