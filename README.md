@@ -22,6 +22,26 @@ The system can detect:
 
 Each detected regime becomes a signal on the event stream that allocation rules and downstream platforms can subscribe to.
 
+## 2. Fundamental Qualification
+
+The system ingests quarterly and yearly earnings reports, processes the data, and builds per-issuer qualifications:
+
+- normalises filings across reporting standards and currencies
+- extracts the canonical line items (revenue, margins, free cash flow, debt, guidance) and the period-over-period deltas
+- derives qualification scores — growth, profitability, balance-sheet strength, earnings-quality — that the allocation engine combines with the prevailing regime
+
+Each new filing that materially changes an issuer's qualification is emitted as a signal on the event stream, so downstream consumers do not need to re-pull fundamentals to react.
+
+## 3. Market Pulse
+
+The system reads the Financial Modeling Prep news feed on a 20-minute cadence and derives a rolling market pulse from it:
+
+- dedupes and clusters headlines by issuer, sector, and macro theme
+- scores each cluster for sentiment, novelty, and reach
+- aggregates into a pulse index that surfaces what the market is reacting to right now and how strongly
+
+Notable shifts in the pulse — for an issuer, a sector, or the broader tape — are emitted as signals on the event stream so the regime detector and allocation engine can react inside the same 20-minute window.
+
 ## Architecture (current scope)
 
 This repository is the first slice of the control plane: an SST v3 API on AWS that stores reference data (stocks, positions) in DynamoDB and emits domain signals through an append-only event stream. See [`doc/signals.md`](doc/signals.md) for the signal catalogue and sequence diagrams, and [`doc/api.md`](doc/api.md) for full route documentation.
@@ -35,6 +55,10 @@ Layers planned on top of this base:
 | **Fundamental scoring** | Per-issuer scoring driven by FMP fundamentals + regime context. |
 | **Allocation engine** | Combines scores + regime to produce target weights. |
 | **Execution adapters** | Translate target weights into orders for trading platforms. |
+
+### Orchestration: AWS Step Functions
+
+The regime detectors, fundamental qualifier, and market-pulse aggregator each run as state machines on AWS Step Functions. Step Functions does not perform triangulation by itself — it *orchestrates* it: a `Parallel` state fans a single classification request out to independent data sources (FMP news, fundamentals, price action, macro feeds) in parallel, and a downstream task fans the results back in to cross-confirm a signal before it is committed to the event stream. Retries, timeouts, and partial-failure handling are declarative state-machine concerns rather than per-Lambda code.
 
 ## Commands
 
