@@ -1,4 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import {
   BatchGetCommand,
   BatchWriteCommand,
@@ -12,8 +13,13 @@ import { Resource } from "sst";
 import { publishEvent } from "./events";
 import { cleanSymbol, error, json, nowIso, parseJsonBody, requireBearerToken } from "./http";
 
+const STOCK_NEW_ADDED_ACTION = "STCO_NEW_ADDED";
+const STOCK_PROCESS_ACTION = "STCO_PROCESS_STOCK";
+type StockAction = typeof STOCK_NEW_ADDED_ACTION | typeof STOCK_PROCESS_ACTION;
+type ProcessingState = "being_processed" | "data_pulled";
+
 type ExecutedAction = {
-  action: typeof STOCK_NEW_ADDED_ACTION;
+  action: StockAction;
   symbol: string;
   eventId: string;
 };
@@ -28,11 +34,12 @@ type StockItem = {
   metadata?: unknown;
   createdAt: string;
   updatedAt: string;
+  processingState?: ProcessingState;
   executedActions?: ExecutedAction[];
 };
 
-const STOCK_NEW_ADDED_ACTION = "STCO_NEW_ADDED";
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const lambdaClient = new LambdaClient({});
 
 export async function list(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const unauthorized = requireBearerToken(event);
@@ -118,9 +125,17 @@ export async function create(event: APIGatewayProxyEventV2): Promise<APIGatewayP
     );
   }
 
-  const executedActions = [await executeStockAction(STOCK_NEW_ADDED_ACTION, stock.item)];
-  const item: StockItem = { ...stock.item, executedActions };
+  const executedActions = [
+    await executeStockAction(STOCK_NEW_ADDED_ACTION, stock.item),
+    await executeStockAction(STOCK_PROCESS_ACTION, stock.item)
+  ];
+  const item: StockItem = {
+    ...stock.item,
+    processingState: "being_processed",
+    executedActions
+  };
   await putStock(item);
+  await invokeProcessor(item.symbol);
 
   return json(
     {
@@ -186,23 +201,28 @@ export async function batchCreate(event: APIGatewayProxyEventV2): Promise<APIGat
     }
   }
 
-  const newExecutedActions = await Promise.all(
-    newStocks.map((stock) => executeStockAction(STOCK_NEW_ADDED_ACTION, stock))
+  const newExecutedActionsPerStock = await Promise.all(
+    newStocks.map(async (stock) => [
+      await executeStockAction(STOCK_NEW_ADDED_ACTION, stock),
+      await executeStockAction(STOCK_PROCESS_ACTION, stock)
+    ])
   );
   const newItems: StockItem[] = newStocks.map((stock, index) => ({
     ...stock,
-    executedActions: [newExecutedActions[index]]
+    processingState: "being_processed",
+    executedActions: newExecutedActionsPerStock[index]
   }));
 
   if (newItems.length > 0) {
     await batchPutStocks(newItems);
+    await Promise.all(newItems.map((item) => invokeProcessor(item.symbol)));
   }
 
   const items = [...cachedItems, ...newItems];
 
   const allExecutedActions = [
     ...cachedItems.flatMap((item) => item.executedActions ?? []),
-    ...newExecutedActions
+    ...newExecutedActionsPerStock.flat()
   ];
 
   return json(
@@ -305,10 +325,7 @@ function buildSubscription(executedActions: ExecutedAction[]): {
   };
 }
 
-async function executeStockAction(
-  action: typeof STOCK_NEW_ADDED_ACTION,
-  stock: StockItem
-): Promise<{ action: typeof STOCK_NEW_ADDED_ACTION; symbol: string; eventId: string }> {
+async function executeStockAction(action: StockAction, stock: StockItem): Promise<ExecutedAction> {
   const execution = {
     action,
     symbol: stock.symbol
@@ -320,6 +337,20 @@ async function executeStockAction(
     ...execution,
     eventId: event.eventId
   };
+}
+
+async function invokeProcessor(symbol: string): Promise<void> {
+  try {
+    await lambdaClient.send(
+      new InvokeCommand({
+        FunctionName: Resource.ProcessStock.name,
+        InvocationType: "Event",
+        Payload: Buffer.from(JSON.stringify({ symbol }))
+      })
+    );
+  } catch (cause) {
+    console.error("failed to invoke ProcessStock", { symbol, cause });
+  }
 }
 
 function normalizeStock(input: unknown): { ok: true; item: StockItem } | { ok: false; message: string } {

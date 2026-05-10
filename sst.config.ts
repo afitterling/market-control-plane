@@ -40,8 +40,53 @@ export default $config({
       }
     });
 
+    const earnings = new sst.aws.Dynamo("Earnings", {
+      fields: {
+        symbol: "string",
+        period: "string"
+      },
+      primaryIndex: {
+        hashKey: "symbol",
+        rangeKey: "period"
+      }
+    });
+
+    const processStock = new sst.aws.Function("ProcessStock", {
+      handler: "src/processor.processStock",
+      link: [stocks, earnings, events],
+      timeout: "5 minutes",
+      environment: {
+        FMP_API_KEY: process.env.FMP_API_KEY ?? ""
+      }
+    });
+
+    new sst.aws.Cron("PullPrices", {
+      schedule: "rate(1 minute)",
+      function: {
+        handler: "src/prices.pullPrices",
+        link: [stocks],
+        timeout: "90 seconds",
+        environment: {
+          FMP_API_KEY: process.env.FMP_API_KEY ?? ""
+        }
+      }
+    });
+
+    new sst.aws.Cron("PullMacd", {
+      schedule: "rate(15 minutes)",
+      function: {
+        handler: "src/macd.processAllMacd",
+        link: [stocks],
+        timeout: "10 minutes",
+        memory: "512 MB",
+        environment: {
+          FMP_API_KEY: process.env.FMP_API_KEY ?? ""
+        }
+      }
+    });
+
     const api = new sst.aws.ApiGatewayV2("Api", {
-      link: [stocks, positions, events],
+      link: [stocks, positions, events, earnings, processStock],
       transform: {
         route: {
           handler: {
@@ -62,6 +107,8 @@ export default $config({
     api.route("POST /stocks", "src/stocks.create");
     api.route("POST /stocks/batch", "src/stocks.batchCreate");
 
+    api.route("GET /earnings/{symbol}", "src/earnings.list");
+
     api.route("GET /positions", "src/positions.list");
     api.route("GET /positions/{accountId}/{symbol}", "src/positions.get");
     api.route("POST /positions", "src/positions.create");
@@ -70,7 +117,9 @@ export default $config({
       api: api.url,
       stocksTable: stocks.name,
       positionsTable: positions.name,
-      eventsTable: events.name
+      eventsTable: events.name,
+      earningsTable: earnings.name,
+      processStockFunction: processStock.name
     };
   }
 });

@@ -75,6 +75,18 @@ Layers planned on top of this base:
 | **Allocation engine** | Combines scores + regime to produce target weights. |
 | **Execution adapters** | Translate target weights into orders for trading platforms. |
 
+### Background jobs
+
+The stack runs three EventBridge-driven background jobs out of the box:
+
+| Job | Cadence | What it does |
+| --- | --- | --- |
+| `ProcessStock` (async Lambda) | On first `POST /stocks` for a symbol | Pulls all annual + quarterly earnings from FMP into the `Earnings` table, then computes MACD across eight timeframes. Transitions the stock through `being_processed` → `data_pulled`. |
+| `PullPrices` | Every 30 s (1 min cron, 2 passes per invocation) | Fetches FMP real-time quotes and writes `price`, `dailyChange`, `dailyChangePercent` (and OHLC + volume) onto every `Stocks` row. |
+| `PullMacd` | Every 15 min | Recomputes MACD(12,26,9) on `5m`, `20m`, `30m`, `1h`, `2h`, `4h`, `1d`, `1w` for every stock and categorises each reading (`strong_bullish` … `strong_bearish`). |
+
+See [`doc/signals.md`](doc/signals.md) for the full state machine, signal payloads, and MACD quality rules.
+
 ### Orchestration: AWS Step Functions
 
 The regime detectors, fundamental qualifier, and market-pulse aggregator each run as state machines on AWS Step Functions. Step Functions does not perform triangulation by itself — it *orchestrates* it: a `Parallel` state fans a single classification request out to independent data sources (FMP news, fundamentals, price action, macro feeds) in parallel, and a downstream task fans the results back in to cross-confirm a signal before it is committed to the event stream. Retries, timeouts, and partial-failure handling are declarative state-machine concerns rather than per-Lambda code.
@@ -106,8 +118,9 @@ Detailed API documentation lives in [`doc/api.md`](doc/api.md). Signal semantics
 - `GET /events` poll or long-poll the signal stream
 - `GET /stocks` list stocks
 - `GET /stocks/{symbol}` get one stock
-- `POST /stocks` idempotent cache-or-create for one stock (emits `STCO_NEW_ADDED` on first insert)
+- `POST /stocks` idempotent cache-or-create for one stock (emits `STCO_NEW_ADDED` + `STCO_PROCESS_STOCK` on first insert and kicks off the earnings + MACD backfill)
 - `POST /stocks/batch` idempotent cache-or-create in batches of 25
+- `GET /earnings/{symbol}` list earnings reports for a symbol (annual + quarterly, optional `kind=ANNUAL|QUARTER`)
 - `GET /positions` list positions
 - `GET /positions?accountId={accountId}` list positions for one account
 - `GET /positions/{accountId}/{symbol}` get one position

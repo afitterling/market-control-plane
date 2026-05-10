@@ -10,9 +10,24 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
+    "Earnings": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
+    "Events": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "Positions": {
       "name": string
       "type": "sst.aws.Dynamo"
+    }
+    "ProcessStock": {
+      "name": string
+      "type": "sst.aws.Function"
+    }
+    "PullPrices": {
+      "type": "sst.aws.Cron"
     }
     "Stocks": {
       "name": string

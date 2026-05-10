@@ -30,6 +30,7 @@ Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 | `GET` | `/stocks/{symbol}` | Get one stock |
 | `POST` | `/stocks` | Cache-or-create one stock (idempotent) |
 | `POST` | `/stocks/batch` | Cache-or-create stocks in batches |
+| `GET` | `/earnings/{symbol}` | List earnings reports for a symbol (annual + quarterly) |
 | `GET` | `/positions` | List positions |
 | `GET` | `/positions?accountId={accountId}` | List positions for one account |
 | `GET` | `/positions/{accountId}/{symbol}` | Get one position |
@@ -39,7 +40,11 @@ Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 
 `POST /stocks` writes through a DynamoDB cache and emits the `STCO_NEW_ADDED` signal only on first insert. Repeat posts for the same `symbol` return the cached row (including its original `executedActions`) without re-writing or re-emitting. Each response carries a `subscribe` block clients can follow to long-poll the resulting event.
 
-See [signals.md](./signals.md) for the full signal catalog, cache semantics, and sequence diagrams.
+On first insert the same request also emits `STCO_PROCESS_STOCK` and asynchronously invokes the `ProcessStock` Lambda, which backfills all annual and quarterly earnings reports from Financial Modeling Prep into the `Earnings` table. The stock row carries `processingState`, transitioning `being_processed` → `data_pulled` (or `process_failed`) and emitting `STCO_DATA_PULLED` / `STCO_PROCESS_FAILED` on completion.
+
+In addition, the `PullPrices` EventBridge cron refreshes `price`, `dailyChange`, and `dailyChangePercent` on every stock row every 30 seconds (1-minute schedule, two passes per invocation).
+
+See [signals.md](./signals.md) for the full signal catalog, cache semantics, processing-state lifecycle, and the earnings/price stores.
 
 ## Example
 
@@ -62,11 +67,17 @@ Example response for a newly inserted stock:
     "name": "Apple Inc.",
     "createdAt": "2026-05-08T10:00:00.000Z",
     "updatedAt": "2026-05-08T10:00:00.000Z",
+    "processingState": "being_processed",
     "executedActions": [
       {
         "action": "STCO_NEW_ADDED",
         "symbol": "AAPL",
         "eventId": "2026-05-08T10:00:00.000Z#3f14fd5a-bd07-45d1-a5f9-b49363f5d305"
+      },
+      {
+        "action": "STCO_PROCESS_STOCK",
+        "symbol": "AAPL",
+        "eventId": "2026-05-08T10:00:00.001Z#11ee1e1e-aaaa-bbbb-cccc-dddddddddddd"
       }
     ]
   },
@@ -75,17 +86,101 @@ Example response for a newly inserted stock:
       "action": "STCO_NEW_ADDED",
       "symbol": "AAPL",
       "eventId": "2026-05-08T10:00:00.000Z#3f14fd5a-bd07-45d1-a5f9-b49363f5d305"
+    },
+    {
+      "action": "STCO_PROCESS_STOCK",
+      "symbol": "AAPL",
+      "eventId": "2026-05-08T10:00:00.001Z#11ee1e1e-aaaa-bbbb-cccc-dddddddddddd"
     }
   ],
   "subscribe": {
     "method": "long-poll",
     "pollUrl": "/events?from=2026-05-08T10%3A00%3A00.000Z%233f14fd5a-bd07-45d1-a5f9-b49363f5d305&waitSeconds=25",
     "waitSeconds": 25,
-    "eventIds": ["2026-05-08T10:00:00.000Z#3f14fd5a-bd07-45d1-a5f9-b49363f5d305"]
+    "eventIds": [
+      "2026-05-08T10:00:00.000Z#3f14fd5a-bd07-45d1-a5f9-b49363f5d305",
+      "2026-05-08T10:00:00.001Z#11ee1e1e-aaaa-bbbb-cccc-dddddddddddd"
+    ]
   },
   "cached": false
 }
 ```
+
+Subscribing to the `subscribe.pollUrl` will additionally deliver `STCO_DATA_PULLED` (or `STCO_PROCESS_FAILED`) once the `ProcessStock` Lambda completes the earnings backfill.
+
+## Earnings
+
+`GET /earnings/{symbol}` returns every earnings row stored for the symbol, most-recent first. Optional `kind=ANNUAL` or `kind=QUARTER` filters by report type.
+
+```sh
+curl "$API_URL/earnings/AAPL?kind=QUARTER" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN"
+```
+
+Example response:
+
+```json
+{
+  "symbol": "AAPL",
+  "count": 1,
+  "reports": [
+    {
+      "symbol": "AAPL",
+      "period": "QUARTER#2026-03-29",
+      "reportDate": "2026-03-29",
+      "fiscalPeriod": "Q2",
+      "calendarYear": "2026",
+      "reportedCurrency": "USD",
+      "revenue": 90753000000,
+      "grossProfit": 42434000000,
+      "operatingIncome": 28611000000,
+      "netIncome": 23636000000,
+      "eps": 1.54,
+      "epsDiluted": 1.53,
+      "source": "fmp",
+      "fetchedAt": "2026-05-11T08:32:10.481Z",
+      "raw": { "...": "..." }
+    }
+  ]
+}
+```
+
+## MACD
+
+Each `Stocks` row carries a `macd` field with readings for `5m`, `20m`, `30m`, `1h`, `2h`, `4h`, `1d`, `1w`. Read it via `GET /stocks/{symbol}`:
+
+```json
+{
+  "stock": {
+    "symbol": "AAPL",
+    "macd": {
+      "5m":  { "macd": 0.21, "signal": 0.18, "histogram": 0.03, "previousHistogram": 0.01, "quality": "bullish",        "asOf": "2026-05-11 09:00:00", "sampleSize": 312 },
+      "20m": { "macd": 0.18, "signal": 0.17, "histogram": 0.01, "previousHistogram": 0.02, "quality": "neutral_bullish","asOf": "2026-05-11 09:00:00", "sampleSize": 78 },
+      "30m": { "...": "..." },
+      "1h":  { "...": "..." },
+      "2h":  { "...": "..." },
+      "4h":  { "...": "..." },
+      "1d":  { "...": "..." },
+      "1w":  { "...": "..." }
+    },
+    "macdUpdatedAt": "2026-05-11T09:00:01.221Z"
+  }
+}
+```
+
+Readings are computed (a) on stock entry by `ProcessStock` and (b) every 15 minutes by the `PullMacd` cron. See [`signals.md`](./signals.md#macd-pipeline) for the timeframe sourcing, aggregation rules, and quality categories.
+
+## Real-time prices
+
+The `PullPrices` EventBridge cron runs every minute and performs two FMP `/quote` passes per invocation (30 seconds apart), giving an effective 30-second refresh cadence. Each pass updates the following fields on the matching `Stocks` row:
+
+```
+price, dailyChange, dailyChangePercent,
+dayLow, dayHigh, openPrice, previousClose,
+lastVolume, priceUpdatedAt
+```
+
+Read the latest price via `GET /stocks/{symbol}`.
 
 ## Event Polling
 

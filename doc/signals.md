@@ -9,12 +9,33 @@ Signals are fire-and-record: the emitting handler writes the event row synchrono
 | Signal | Emitted by | Trigger | Payload |
 | --- | --- | --- | --- |
 | `STCO_NEW_ADDED` | `POST /stocks`, `POST /stocks/batch` | First time a `symbol` is written to the `Stocks` cache table | `{ action: "STCO_NEW_ADDED", symbol }` |
+| `STCO_PROCESS_STOCK` | `POST /stocks`, `POST /stocks/batch` | Fired in the same request as `STCO_NEW_ADDED`. Marks the stock as `processingState="being_processed"` and asynchronously invokes the `ProcessStock` Lambda. | `{ action: "STCO_PROCESS_STOCK", symbol }` |
+| `STCO_DATA_PULLED` | `ProcessStock` Lambda | The processor finished fetching all annual + quarterly earnings from FMP and stored them in the `Earnings` table. Stock row flips to `processingState="data_pulled"`. | `{ action: "STCO_DATA_PULLED", symbol, annualCount, quarterlyCount }` |
+| `STCO_PROCESS_FAILED` | `ProcessStock` Lambda | The processor failed (FMP error, missing API key, etc). Stock row flips to `processingState="process_failed"` with `processingError` set. | `{ action: "STCO_PROCESS_FAILED", symbol, error }` |
 
 ### `STCO_NEW_ADDED`
 
 Fired when a stock symbol is inserted for the first time. Re-posting the same symbol does **not** re-emit the signal — the cached record (including the `executedActions` from the original insert) is returned instead.
 
 The eventId of the emission is persisted on the stock row under `executedActions` and is also returned in the POST response so a client that just inserted the stock can immediately subscribe and receive its own emission.
+
+### `STCO_PROCESS_STOCK`
+
+Fired immediately after `STCO_NEW_ADDED` in the same POST request. The stock row is written with `processingState="being_processed"` and the `ProcessStock` Lambda is asynchronously invoked (`InvocationType: "Event"`) with `{ symbol }`. The POST response returns to the client without waiting for the backfill.
+
+### `STCO_DATA_PULLED`
+
+Fired by the `ProcessStock` Lambda once it has fetched all annual and quarterly income statements from Financial Modeling Prep, written them to the `Earnings` table (one row per `symbol#period`), and updated the stock row with:
+
+- `processingState = "data_pulled"`
+- `dataPulledAt` — ISO timestamp of completion
+- `annualReportCount`, `quarterlyReportCount`
+
+Clients that long-polled on the `STCO_PROCESS_STOCK` eventId will keep polling and receive this event when the backfill finishes.
+
+### `STCO_PROCESS_FAILED`
+
+Fired by the `ProcessStock` Lambda when the FMP fetch or the DynamoDB write fails. The stock row flips to `processingState="process_failed"` and stores the error message in `processingError`. Lambda then re-throws so the AWS retry policy kicks in (a successful retry produces `STCO_DATA_PULLED` and clears the failure state).
 
 ## Stock POST cache semantics
 
@@ -62,3 +83,86 @@ Source: [diagrams/polling-loop.mmd](diagrams/polling-loop.mmd)
 | `after` | Exclusive — returns events with `eventId > after` | Subsequent polls, using the previous `nextCursor` |
 
 `from` and `after` are mutually exclusive in a single request.
+
+## Stock processing state
+
+Stocks created through `POST /stocks` (or `POST /stocks/batch`) carry a `processingState` field that tracks the asynchronous earnings backfill:
+
+| State | Set by | Meaning |
+| --- | --- | --- |
+| `being_processed` | `POST /stocks` on cache miss | The row was created and `ProcessStock` was invoked. Earnings backfill is in flight. |
+| `data_pulled` | `ProcessStock` Lambda on success | Annual + quarterly earnings have been fetched from FMP and stored in the `Earnings` table. |
+| `process_failed` | `ProcessStock` Lambda on failure | FMP fetch or DB write failed. See `processingError` on the row. |
+
+The state transitions are mirrored on the signal stream — clients can either poll `GET /stocks/{symbol}` for the current state or long-poll the event stream for the corresponding `STCO_*` signals.
+
+## Earnings store
+
+The `Earnings` DynamoDB table is keyed by `(symbol, period)` where `period` is one of:
+
+- `ANNUAL#<reportDate>` — annual income statement
+- `QUARTER#<reportDate>` — quarterly income statement
+
+Each row contains the canonical line items extracted from the FMP income statement (`revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `eps`, `epsDiluted`, `reportedCurrency`, `fiscalPeriod`, `calendarYear`), plus the full FMP payload under `raw` and a `fetchedAt` timestamp. Read via `GET /earnings/{symbol}`.
+
+## MACD pipeline
+
+For each stock, MACD(12,26,9) is computed across eight timeframes and stored on the `Stocks` row under `macd`:
+
+| Timeframe | FMP source | Aggregation |
+| --- | --- | --- |
+| `5m` | `historical-chart/5min` | — |
+| `20m` | `historical-chart/5min` | 4 × 5min bars |
+| `30m` | `historical-chart/30min` | — |
+| `1h` | `historical-chart/1hour` | — |
+| `2h` | `historical-chart/1hour` | 2 × 1hour bars |
+| `4h` | `historical-chart/4hour` | — |
+| `1d` | `historical-price-full` | — |
+| `1w` | `historical-price-full` | 5 × daily bars |
+
+The reading per timeframe is:
+
+```json
+{
+  "macd": -0.124,
+  "signal": -0.088,
+  "histogram": -0.036,
+  "previousHistogram": -0.028,
+  "quality": "bearish",
+  "asOf": "2026-05-11 09:00:00",
+  "sampleSize": 312
+}
+```
+
+### Quality categories
+
+Quality is derived from the relationship between MACD, signal, histogram, and the *change* in histogram against the previous bar:
+
+| Category | Meaning |
+| --- | --- |
+| `strong_bullish` | MACD above signal, both lines above zero, histogram expanding, strength > 25% of MACD magnitude |
+| `bullish` | MACD above signal, histogram strength > 5% of MACD magnitude |
+| `neutral_bullish` | MACD above signal but histogram small (potential weakening uptrend or early cross) |
+| `neutral_bearish` | MACD below signal but histogram small (potential weakening downtrend or early cross) |
+| `bearish` | MACD below signal, histogram strength > 5% |
+| `strong_bearish` | MACD below signal, both lines below zero, histogram expanding, strength > 25% |
+| `insufficient_data` | Fewer than 40 closing prices were available from FMP for that interval |
+
+### Triggers
+
+The MACD readings are refreshed in two ways:
+
+1. **On stock entry.** The `ProcessStock` Lambda calls `processMacd` after the earnings backfill completes, so a freshly entered stock has a full set of MACD readings as soon as `STCO_DATA_PULLED` fires.
+2. **15-minute cron.** The `PullMacd` EventBridge cron runs every 15 minutes, scans the `Stocks` table, and recomputes the MACD readings for every symbol with bounded concurrency (4 symbols in flight at a time).
+
+## Real-time prices
+
+A `PullPrices` cron runs on an EventBridge `rate(1 minute)` schedule. EventBridge does not support sub-minute schedules, so the cron lambda runs **two passes per invocation, 30 seconds apart**, giving an effective 30-second refresh cadence.
+
+Each pass scans the `Stocks` table for symbols, batches them into FMP `/quote/{symbols}` requests (up to 100 symbols per call), and writes the following fields back to each stock row:
+
+- `price`, `dailyChange`, `dailyChangePercent`
+- `dayLow`, `dayHigh`, `openPrice`, `previousClose`, `lastVolume`
+- `priceUpdatedAt`
+
+Quotes for symbols that are not in the `Stocks` table (or that FMP does not return) are silently skipped. Failures hitting FMP are logged but do not abort the pass — partial updates are preferable to none.

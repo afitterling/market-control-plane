@@ -14,5 +14,13 @@ declare module "sst" {
       name: string;
       type: "sst.aws.Dynamo";
     };
+    Earnings: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
+    ProcessStock: {
+      name: string;
+      type: "sst.aws.Function";
+    };
   }
 }
