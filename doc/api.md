@@ -35,6 +35,8 @@ Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 | `GET` | `/alerts/{alertId}` | Get one signal-alert rule |
 | `POST` | `/alerts` | Create a signal-alert rule |
 | `DELETE` | `/alerts/{alertId}` | Delete a signal-alert rule |
+| `GET` | `/pulse` | List per-region market-pulse cache rows |
+| `GET` | `/pulse/{region}` | Get the pulse cache row for one region |
 | `GET` | `/positions` | List positions |
 | `GET` | `/positions?accountId={accountId}` | List positions for one account |
 | `GET` | `/positions/{accountId}/{symbol}` | Get one position |
@@ -173,6 +175,17 @@ Each `Stocks` row carries a `macd` field with readings for `5m`, `20m`, `30m`, `
 ```
 
 Readings are computed (a) on stock entry by `ProcessStock` and (b) every 15 minutes by the `PullMacd` cron. See [`signals.md`](./signals.md#macd-pipeline) for the timeframe sourcing, aggregation rules, and quality categories.
+
+## Market pulse
+
+Per-region cache populated by the `PullPulse` cron every 20 minutes from the FMP news feed. Each row carries a status band (`calm` / `watch` / `elevated` / `critical`), criticality + severity scores, the top themes, and the source article links. Regions with no fresh news for 4+ hours are flagged `stale: true`.
+
+```sh
+curl "$API_URL/pulse" -H "Authorization: Bearer $API_BEARER_TOKEN"
+curl "$API_URL/pulse/Middle%20East" -H "Authorization: Bearer $API_BEARER_TOKEN"
+```
+
+See [`signals.md`](./signals.md#market-pulse) for the row shape, theme dictionary, and the `PULSE_REGION_UPDATED` / `PULSE_REGION_STALE` signals.
 
 ## Signal alerts
 

@@ -39,6 +39,13 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Dynamo"
     }
+    "MarketPulse": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
+    "PullPulse": {
+      "type": "sst.aws.Cron"
+    }
     "Stocks": {
       "name": string
       "type": "sst.aws.Dynamo"

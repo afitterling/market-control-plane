@@ -14,6 +14,8 @@ Signals are fire-and-record: the emitting handler writes the event row synchrono
 | `STCO_PROCESS_FAILED` | `ProcessStock` Lambda | The processor failed (FMP error, missing API key, etc). Stock row flips to `processingState="process_failed"` with `processingError` set. | `{ action: "STCO_PROCESS_FAILED", symbol, error }` |
 | `SIGN_ALERT_RAISED` | `EvaluateAlerts` cron | An enabled `SignalAlerts` rule matched during a market session. | `{ action: "SIGN_ALERT_RAISED", alertId, name, session, matchedSymbols?, detail? }` |
 | `SIGN_ALERT_TICK_SKIPPED` | `EvaluateAlerts` cron | The evaluator tick fired outside any market session and was skipped. | `{ action: "SIGN_ALERT_TICK_SKIPPED", reason: "market_closed", at }` |
+| `PULSE_REGION_UPDATED` | `PullPulse` cron | A region's pulse cache row was rewritten and its `status` band changed (or transitioned out of `stale`). | `{ action: "PULSE_REGION_UPDATED", region, previousStatus, status, criticality, severity, articleCount, summary }` |
+| `PULSE_REGION_STALE` | `PullPulse` cron | A region has had no fresh news for 4+ hours — its cache row was flagged `stale: true`. | `{ action: "PULSE_REGION_STALE", region, lastNewsAt, hoursSinceLastNews }` |
 
 ### `STCO_NEW_ADDED`
 
@@ -106,6 +108,56 @@ The `Earnings` DynamoDB table is keyed by `(symbol, period)` where `period` is o
 - `QUARTER#<reportDate>` — quarterly income statement
 
 Each row contains the canonical line items extracted from the FMP income statement (`revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `eps`, `epsDiluted`, `reportedCurrency`, `fiscalPeriod`, `calendarYear`), plus the full FMP payload under `raw` and a `fetchedAt` timestamp. Read via `GET /earnings/{symbol}`.
+
+## Market pulse
+
+The `PullPulse` cron runs every 20 minutes, pulls the FMP news feed (`/api/v3/stock_news` + `/api/v4/general_news`), and aggregates the result into a per-region cache stored in the `MarketPulse` DynamoDB table (PK: `region`).
+
+### Pipeline
+
+For every article published in the last 20 minutes, the cron:
+
+1. **Extracts regions** from the headline + body via a keyword/alias dictionary (e.g. `Germany`, `Middle East`, `Latin America`).
+2. **Extracts themes** (war, sanctions, default, recession, rate_hike, cyberattack, …) by the same dictionary mechanism.
+3. **Scores sentiment** through a deterministic positive/negative hint list.
+4. **Aggregates per region**: sums weighted theme severity/criticality, applies a small reach boost based on article count, clamps to 0–100, then maps the higher of the two scores to a status band: `calm` (<25) → `watch` (25–49) → `elevated` (50–69) → `critical` (≥70).
+
+The v1 extractor is intentionally rule-based and deterministic. The repo-level plan (see [`README.md`](../README.md#4-ai-models)) is to swap this for the FAU-pruned NER + sentiment model behind the same interface.
+
+### Cache semantics
+
+- **Cache is rewritten every 20 minutes** for every region that had at least one article in the window — `PutCommand` overwrites the prior row entirely.
+- **No news for 4 hours or more → marked stale.** After the fresh-region passes, the cron scans the table; any region whose `lastNewsAt` is older than 4h is rewritten with `stale: true`, `staleSince`, and a summary explaining how many hours have passed. The row is *not* deleted — historical context (links, scores) remains available, just flagged.
+- When stale data eventually receives fresh news, the next run rewrites the row with `stale: false` and emits `PULSE_REGION_UPDATED` because the staleness flag flipped.
+
+### Row shape
+
+```json
+{
+  "region": "Middle East",
+  "status": "elevated",
+  "criticality": 58,
+  "severity": 47,
+  "articleCount": 6,
+  "topThemes": ["sanctions", "energy_shock"],
+  "summary": "Middle East elevated — 6 articles in window, themes: sanctions, energy_shock.",
+  "links": [
+    {
+      "title": "OPEC+ signals deeper cuts amid Gulf tensions",
+      "url": "https://example.com/opec-cuts",
+      "site": "example.com",
+      "publishedAt": "2026-05-11T08:14:00.000Z",
+      "sentiment": -3,
+      "themes": ["energy_shock", "sanctions"]
+    }
+  ],
+  "windowStart": "2026-05-11T07:55:00.000Z",
+  "windowEnd": "2026-05-11T08:15:00.000Z",
+  "lastNewsAt": "2026-05-11T08:14:00.000Z",
+  "stale": false,
+  "updatedAt": "2026-05-11T08:15:01.103Z"
+}
+```
 
 ## Signal alerts
 

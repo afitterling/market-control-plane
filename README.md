@@ -85,6 +85,7 @@ The stack runs three EventBridge-driven background jobs out of the box:
 | `PullPrices` | Every 30 s (1 min cron, 2 passes per invocation) | Fetches FMP real-time quotes and writes `price`, `dailyChange`, `dailyChangePercent` (and OHLC + volume) onto every `Stocks` row. |
 | `PullMacd` | Every 15 min | Recomputes MACD(12,26,9) on `5m`, `20m`, `30m`, `1h`, `2h`, `4h`, `1d`, `1w` for every stock and categorises each reading (`strong_bullish` … `strong_bearish`). |
 | `EvaluateAlerts` | Every 30 min, US market sessions only | Evaluates user-defined rules stored in the `SignalAlerts` table during premarket (04:00–09:30 ET), regular (09:30–16:00) and afterhours (16:00–20:00). Ticks outside session windows are skipped. |
+| `PullPulse` | Every 20 min | Polls FMP news, extracts regions + themes per article, scores criticality/severity, writes a per-region row to `MarketPulse` with the source article links. Regions with no fresh news for 4+ hours are flagged `stale`. |
 
 See [`doc/signals.md`](doc/signals.md) for the full state machine, signal payloads, and MACD quality rules.
 
@@ -123,6 +124,7 @@ Detailed API documentation lives in [`doc/api.md`](doc/api.md). Signal semantics
 - `POST /stocks/batch` idempotent cache-or-create in batches of 25
 - `GET /earnings/{symbol}` list earnings reports for a symbol (annual + quarterly, optional `kind=ANNUAL|QUARTER`)
 - `GET /alerts`, `POST /alerts`, `GET /alerts/{alertId}`, `DELETE /alerts/{alertId}` manage signal-alert rules (evaluated every 30 min during US market sessions)
+- `GET /pulse`, `GET /pulse/{region}` read the per-region market-pulse cache (refreshed every 20 min, stale after 4 h without news)
 - `GET /positions` list positions
 - `GET /positions?accountId={accountId}` list positions for one account
 - `GET /positions/{accountId}/{symbol}` get one position

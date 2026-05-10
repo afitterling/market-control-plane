@@ -22,6 +22,10 @@ declare module "sst" {
       name: string;
       type: "sst.aws.Dynamo";
     };
+    MarketPulse: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
     ProcessStock: {
       name: string;
       type: "sst.aws.Function";

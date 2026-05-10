@@ -60,6 +60,15 @@ export default $config({
       }
     });
 
+    const marketPulse = new sst.aws.Dynamo("MarketPulse", {
+      fields: {
+        region: "string"
+      },
+      primaryIndex: {
+        hashKey: "region"
+      }
+    });
+
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
       link: [stocks, earnings, events],
@@ -103,8 +112,21 @@ export default $config({
       }
     });
 
+    new sst.aws.Cron("PullPulse", {
+      schedule: "rate(20 minutes)",
+      function: {
+        handler: "src/pulse.pullPulse",
+        link: [marketPulse, events],
+        timeout: "2 minutes",
+        memory: "512 MB",
+        environment: {
+          FMP_API_KEY: process.env.FMP_API_KEY ?? ""
+        }
+      }
+    });
+
     const api = new sst.aws.ApiGatewayV2("Api", {
-      link: [stocks, positions, events, earnings, signalAlerts, processStock],
+      link: [stocks, positions, events, earnings, signalAlerts, marketPulse, processStock],
       transform: {
         route: {
           handler: {
@@ -132,6 +154,9 @@ export default $config({
     api.route("POST /alerts", "src/alerts.create");
     api.route("DELETE /alerts/{alertId}", "src/alerts.remove");
 
+    api.route("GET /pulse", "src/pulse.list");
+    api.route("GET /pulse/{region}", "src/pulse.get");
+
     api.route("GET /positions", "src/positions.list");
     api.route("GET /positions/{accountId}/{symbol}", "src/positions.get");
     api.route("POST /positions", "src/positions.create");
@@ -143,6 +168,7 @@ export default $config({
       eventsTable: events.name,
       earningsTable: earnings.name,
       signalAlertsTable: signalAlerts.name,
+      marketPulseTable: marketPulse.name,
       processStockFunction: processStock.name
     };
   }
