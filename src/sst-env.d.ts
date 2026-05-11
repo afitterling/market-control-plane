@@ -2,15 +2,15 @@ import "sst";
 
 declare module "sst" {
   export interface Resource {
-    ApiBearerToken: {
+    API_BEARER_TOKEN: {
       value: string;
       type: "sst.sst.Secret";
     };
-    FmpApiKey: {
+    FMP_API_KEY: {
       value: string;
       type: "sst.sst.Secret";
     };
-    PulseRefreshToken: {
+    PULSE_REFRESH_TOKEN: {
       value: string;
       type: "sst.sst.Secret";
     };

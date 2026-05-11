@@ -9,9 +9,9 @@ export default $config({
     };
   },
   async run() {
-    const apiBearerToken = new sst.Secret("ApiBearerToken");
-    const fmpApiKey = new sst.Secret("FmpApiKey");
-    const pulseRefreshToken = new sst.Secret("PulseRefreshToken");
+    const apiBearerToken = new sst.Secret("API_BEARER_TOKEN");
+    const fmpApiKey = new sst.Secret("FMP_API_KEY");
+    const pulseRefreshToken = new sst.Secret("PULSE_REFRESH_TOKEN");
 
     const stocks = new sst.aws.Dynamo("Stocks", {
       fields: {

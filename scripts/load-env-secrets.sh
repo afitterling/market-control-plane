@@ -32,8 +32,8 @@ set_secret() {
   npx sst secret set "$name" "$value" --stage "$STAGE"
 }
 
-set_secret ApiBearerToken "${API_BEARER_TOKEN:-}"
-set_secret FmpApiKey "${FMP_API_KEY:-}"
-set_secret PulseRefreshToken "${PULSE_REFRESH_TOKEN:-}"
+set_secret API_BEARER_TOKEN "${API_BEARER_TOKEN:-}"
+set_secret FMP_API_KEY "${FMP_API_KEY:-}"
+set_secret PULSE_REFRESH_TOKEN "${PULSE_REFRESH_TOKEN:-}"
 
 echo "load-env-secrets: done"

@@ -91,9 +91,9 @@ const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 export async function pullPulse(): Promise<PulseRunResult> {
   const startedAt = Date.now();
   console.log("pulse.start", { at: new Date(startedAt).toISOString() });
-  const apiKey = Resource.FmpApiKey.value;
+  const apiKey = Resource.FMP_API_KEY.value;
   if (!apiKey) {
-    throw new Error("FmpApiKey secret is not configured.");
+    throw new Error("FMP_API_KEY secret is not configured.");
   }
 
   const windowEnd = new Date();
@@ -421,7 +421,7 @@ export async function refresh(event: APIGatewayProxyEventV2): Promise<APIGateway
     ? String((body as Record<string, unknown>).refreshToken ?? "")
     : "";
 
-  if (!tokenMatches(provided, Resource.PulseRefreshToken.value)) {
+  if (!tokenMatches(provided, Resource.PULSE_REFRESH_TOKEN.value)) {
     return error("Invalid refresh token.", 401);
   }
 

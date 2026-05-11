@@ -6,10 +6,11 @@
   "license": "AGPL-3.0-or-later",
   "author": "Alex Fitterling",
   "scripts": {
-    "setup": "sst install",
-    "dev": "sst dev",
-    "deploy": "sst deploy",
-    "remove": "sst remove",
+    "setup": "npx sst install",
+    "secrets:load": "npx sst secret load .env --stage local",
+    "dev": "npm run secrets:load && npx sst dev --stage local",
+    "deploy": "npm run secrets:load && npx sst deploy --stage local",
+    "remove": "npx sst remove --stage local",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

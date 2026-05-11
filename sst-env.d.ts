@@ -10,7 +10,7 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
-    "ApiBearerToken": {
+    "API_BEARER_TOKEN": {
       "type": "sst.sst.Secret"
       "value": string
     }
@@ -22,7 +22,7 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Dynamo"
     }
-    "FmpApiKey": {
+    "FMP_API_KEY": {
       "type": "sst.sst.Secret"
       "value": string
     }
@@ -50,7 +50,7 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Function"
     }
-    "PulseRefreshToken": {
+    "PULSE_REFRESH_TOKEN": {
       "type": "sst.sst.Secret"
       "value": string
     }

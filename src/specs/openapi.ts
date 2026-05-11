@@ -225,7 +225,7 @@ export const openApiSpec = {
         tags: ["Pulse"],
         summary: "Force a pulse run (news + regions + market data + snapshot)",
         description:
-          "Requires the regular Bearer token AND the PulseRefreshToken value in the JSON body.",
+          "Requires the regular Bearer token AND the PULSE_REFRESH_TOKEN value in the JSON body.",
         requestBody: {
           required: true,
           content: {
@@ -236,7 +236,7 @@ export const openApiSpec = {
                 properties: {
                   refreshToken: {
                     type: "string",
-                    description: "Value of the PulseRefreshToken SST secret"
+                    description: "Value of the PULSE_REFRESH_TOKEN SST secret"
                   }
                 }
               }
@@ -412,7 +412,7 @@ export const openApiSpec = {
       bearerAuth: {
         type: "http",
         scheme: "bearer",
-        description: "Value of the ApiBearerToken SST secret"
+        description: "Value of the API_BEARER_TOKEN SST secret"
       }
     },
     responses: {

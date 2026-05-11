@@ -25,7 +25,7 @@ export function error(message: string, statusCode = 400, details?: unknown): API
 }
 
 export function requireBearerToken(event: APIGatewayProxyEventV2): APIGatewayProxyResultV2 | undefined {
-  const expectedToken = Resource.ApiBearerToken.value;
+  const expectedToken = Resource.API_BEARER_TOKEN.value;
   const authorization = event.headers.authorization ?? event.headers.Authorization ?? "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
 
