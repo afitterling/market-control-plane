@@ -173,6 +173,9 @@ export default $config({
     api.route("GET /", "src/api.health");
     api.route("GET /events", "src/events.list");
 
+    api.route("GET /docs", "src/docs.ui");
+    api.route("GET /openapi.json", "src/docs.spec");
+
     api.route("GET /stocks", "src/stocks.list");
     api.route("GET /stocks/{symbol}", "src/stocks.get");
     api.route("POST /stocks", "src/stocks.create");
