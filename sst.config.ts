@@ -106,6 +106,15 @@ export default $config({
       }
     });
 
+    const industries = new sst.aws.Dynamo("Industries", {
+      fields: {
+        industry: "string"
+      },
+      primaryIndex: {
+        hashKey: "industry"
+      }
+    });
+
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
       link: [stocks, earnings, events, fmpApiKey],
@@ -170,6 +179,7 @@ export default $config({
         marketPulseSnapshot,
         marketRegime,
         marketAlignment,
+        industries,
         processStock,
         apiBearerToken,
         fmpApiKey,
@@ -207,8 +217,14 @@ export default $config({
     api.route("GET /pulse", "src/pulse.list");
     api.route("GET /pulse/snapshot", "src/pulse.snapshot");
     api.route("GET /pulse/history", "src/pulse.history");
+    api.route("GET /pulse/tile", "src/pulse.tile");
+    api.route("GET /pulse/sectors", "src/pulse.sectors");
     api.route("POST /pulse/refresh", "src/pulse.refresh");
     api.route("GET /pulse/{region}", "src/pulse.get");
+
+    api.route("POST /industries/backfill", "src/industries.backfill");
+    api.route("GET /industries", "src/industries.list");
+    api.route("GET /industries/{industry}", "src/industries.get");
 
     api.route("GET /regime", "src/regime.list");
     api.route("GET /regime/{scale}", "src/regime.getScale");

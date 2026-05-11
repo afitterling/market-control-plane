@@ -11,7 +11,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda
 import { Resource } from "sst";
 import { publishEvent } from "./events";
 import { error, json, nowIso, parseJsonBody, requireBearerToken, tokenMatches } from "./http";
-import { fetchMarketData, type MarketDataSnapshot } from "./marketData";
+import { fetchMarketData, type MarketDataSnapshot, type RiskState } from "./marketData";
 
 const PULSE_REGION_UPDATED = "PULSE_REGION_UPDATED";
 const PULSE_REGION_STALE = "PULSE_REGION_STALE";
@@ -75,6 +75,7 @@ export type PulseSnapshot = {
   overall: PulseOverall;
   regions: PulseRow[];
   marketData: MarketDataSnapshot;
+  riskState: RiskState;
 };
 
 export type PulseRunResult = {
@@ -201,7 +202,8 @@ export async function pullPulse(): Promise<PulseRunResult> {
     snapshotAt: updatedAt,
     overall,
     regions: regionsAfterRun.sort((first, second) => second.criticality - first.criticality),
-    marketData
+    marketData,
+    riskState: marketData.riskState
   };
 
   await persistSnapshot(snapshot);
@@ -248,6 +250,12 @@ async function fetchMarketDataSafely(apiKey: string): Promise<MarketDataSnapshot
       fx: [],
       sectors: [],
       sectorRotation: { leading: [], lagging: [], summary: "Market data unavailable." },
+      indices: [],
+      commodities: [],
+      treasury: null,
+      riskPremium: null,
+      rotation: null,
+      riskState: "neutral",
       fetchedAt: new Date().toISOString()
     };
   }
@@ -471,6 +479,148 @@ export async function history(event: APIGatewayProxyEventV2): Promise<APIGateway
 
 export async function scanAllPulse(): Promise<PulseRow[]> {
   return scanAllRows();
+}
+
+export async function tile(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const unauthorized = requireBearerToken(event);
+  if (unauthorized) {
+    return unauthorized;
+  }
+  const seriesLimit = Number(event.queryStringParameters?.points ?? 60);
+  const limit = Number.isFinite(seriesLimit)
+    ? Math.min(Math.max(Math.trunc(seriesLimit), 5), SNAPSHOT_RETENTION)
+    : 60;
+  const response = await documentClient.send(
+    new QueryCommand({
+      TableName: Resource.MarketPulseSnapshot.name,
+      KeyConditionExpression: "#scope = :scope",
+      ExpressionAttributeNames: { "#scope": "scope" },
+      ExpressionAttributeValues: { ":scope": SNAPSHOT_SCOPE },
+      ScanIndexForward: false,
+      Limit: limit
+    })
+  );
+  const snapshots = ((response.Items ?? []) as PulseSnapshot[])
+    .sort((first, second) => first.snapshotAt.localeCompare(second.snapshotAt));
+  if (snapshots.length === 0) {
+    return json({ tile: null });
+  }
+  const latest = snapshots[snapshots.length - 1];
+  const leading = latest.marketData.sectors.filter((entry) => entry.momentum === "leading");
+  const lagging = latest.marketData.sectors.filter((entry) => entry.momentum === "lagging");
+  const drivers = buildDrivers(latest);
+  const title = buildTileTitle(latest, leading);
+  const narrative = buildTileNarrative(latest, leading, lagging);
+
+  return json({
+    tile: {
+      riskState: latest.riskState ?? "neutral",
+      title,
+      narrative,
+      leadingSectors: leading.map((entry) => ({
+        symbol: entry.symbol,
+        name: entry.name,
+        changePercent: entry.changePercent
+      })),
+      laggingSectors: lagging.map((entry) => ({
+        symbol: entry.symbol,
+        name: entry.name,
+        changePercent: entry.changePercent
+      })),
+      drivers,
+      updatedAt: latest.snapshotAt,
+      cadence: "every 10 min during market hours",
+      series: snapshots.map((snap) => ({
+        at: snap.snapshotAt,
+        state: snap.riskState ?? "neutral"
+      }))
+    }
+  });
+}
+
+export async function sectors(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const unauthorized = requireBearerToken(event);
+  if (unauthorized) {
+    return unauthorized;
+  }
+  const latest = await fetchLatestSnapshot();
+  if (!latest) {
+    return json({ sectors: [], rotation: null, updatedAt: null });
+  }
+  return json({
+    sectors: latest.marketData.sectors,
+    rotation: latest.marketData.sectorRotation,
+    riskState: latest.riskState ?? "neutral",
+    updatedAt: latest.snapshotAt
+  });
+}
+
+function buildDrivers(snapshot: PulseSnapshot): { icon: string; text: string }[] {
+  const out: { icon: string; text: string }[] = [];
+  const md = snapshot.marketData;
+  if (md.vix && Math.abs(md.vix.changePercent) >= 5) {
+    const sign = md.vix.changePercent >= 0 ? "+" : "";
+    out.push({ icon: "bolt", text: `VIX ${md.vix.changePercent >= 0 ? "surge" : "drop"} ${sign}${md.vix.changePercent}%` });
+  }
+  const wti = md.commodities.find((entry) => entry.symbol === "CLUSD");
+  const brent = md.commodities.find((entry) => entry.symbol === "BZUSD");
+  if (wti && brent && (Math.abs(wti.changePercent) >= 1 || Math.abs(brent.changePercent) >= 1)) {
+    const wtiSign = wti.changePercent >= 0 ? "+" : "";
+    const brentSign = brent.changePercent >= 0 ? "+" : "";
+    out.push({
+      icon: "bolt",
+      text: `Oil price ${wti.changePercent >= 0 ? "spike" : "drop"} WTI ${wtiSign}${wti.changePercent}%, Brent ${brentSign}${brent.changePercent}%`
+    });
+  }
+  const t10 = md.treasury?.rates.find((rate) => rate.tenor === "10Y");
+  if (t10 && t10.changeBp !== null && Math.abs(t10.changeBp) >= 1) {
+    const dir = t10.changeBp < 0 ? "drops" : "rises";
+    out.push({ icon: "bolt", text: `10-year Treasury yield ${dir} ${Math.abs(t10.changeBp)}bp` });
+  }
+  return out;
+}
+
+function buildTileTitle(snapshot: PulseSnapshot, leading: PulseSnapshot["marketData"]["sectors"]): string {
+  const md = snapshot.marketData;
+  const volPart = md.vix && md.vix.changePercent >= 5 ? "Volatility spikes" : md.vix && md.vix.changePercent <= -5 ? "Volatility eases" : "Markets mixed";
+  if (leading.length === 0) return `${volPart} across major benchmarks`;
+  const names = leading.slice(0, 2).map((entry) => entry.name.toLowerCase()).join(" and ");
+  return `${volPart} as ${names} lead modest gains`;
+}
+
+function buildTileNarrative(
+  snapshot: PulseSnapshot,
+  leading: PulseSnapshot["marketData"]["sectors"],
+  lagging: PulseSnapshot["marketData"]["sectors"]
+): string {
+  const parts: string[] = [];
+  const md = snapshot.marketData;
+  if (md.vix) {
+    const dir = md.vix.changePercent >= 0 ? "rising" : "falling";
+    parts.push(`Markets show ${snapshot.riskState === "risk-off" ? "a cautious tone" : snapshot.riskState === "risk-on" ? "a constructive tone" : "a mixed tone"} with the CBOE Volatility Index ${dir} ${formatPct(md.vix.changePercent)}`);
+  }
+  if (leading.length > 0) {
+    parts.push(`${leading.map((entry) => entry.name).join(" and ")} outperform`);
+  }
+  if (lagging.length > 0) {
+    parts.push(`while ${lagging.map((entry) => entry.name).join(" and ")} lag`);
+  }
+  const wti = md.commodities.find((entry) => entry.symbol === "CLUSD");
+  const brent = md.commodities.find((entry) => entry.symbol === "BZUSD");
+  if (wti && brent) {
+    parts.push(`oil prices at WTI ${formatPct(wti.changePercent)} and Brent ${formatPct(brent.changePercent)}`);
+  }
+  const t10 = md.treasury?.rates.find((rate) => rate.tenor === "10Y");
+  if (t10 && t10.changeBp !== null) {
+    const dir = t10.changeBp < 0 ? "down" : "up";
+    parts.push(`10-year Treasury yield ${dir} ${Math.abs(t10.changeBp)}bp`);
+  }
+  return parts.join(", ") + ".";
+}
+
+function formatPct(value: number): string {
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value}%`;
 }
 
 async function scanAllRows(): Promise<PulseRow[]> {

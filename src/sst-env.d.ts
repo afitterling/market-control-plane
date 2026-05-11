@@ -18,6 +18,10 @@ declare module "sst" {
       name: string;
       type: "sst.aws.Dynamo";
     };
+    Industries: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
     Positions: {
       name: string;
       type: "sst.aws.Dynamo";

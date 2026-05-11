@@ -6,13 +6,13 @@
 
 declare module "sst" {
   export interface Resource {
-    "Api": {
-      "type": "sst.aws.ApiGatewayV2"
-      "url": string
-    }
     "API_BEARER_TOKEN": {
       "type": "sst.sst.Secret"
       "value": string
+    }
+    "Api": {
+      "type": "sst.aws.ApiGatewayV2"
+      "url": string
     }
     "Earnings": {
       "name": string
@@ -25,6 +25,10 @@ declare module "sst" {
     "FMP_API_KEY": {
       "type": "sst.sst.Secret"
       "value": string
+    }
+    "Industries": {
+      "name": string
+      "type": "sst.aws.Dynamo"
     }
     "MarketAlignment": {
       "name": string
@@ -42,6 +46,10 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Dynamo"
     }
+    "PULSE_REFRESH_TOKEN": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "Positions": {
       "name": string
       "type": "sst.aws.Dynamo"
@@ -49,10 +57,6 @@ declare module "sst" {
     "ProcessStock": {
       "name": string
       "type": "sst.aws.Function"
-    }
-    "PULSE_REFRESH_TOKEN": {
-      "type": "sst.sst.Secret"
-      "value": string
     }
     "SignalAlerts": {
       "name": string
