@@ -163,6 +163,10 @@ export async function pullPulse(): Promise<{
   };
 }
 
+export async function scanAllPulse(): Promise<PulseRow[]> {
+  return scanAllRows();
+}
+
 async function scanAllRows(): Promise<PulseRow[]> {
   const rows: PulseRow[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;

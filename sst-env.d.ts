@@ -18,6 +18,18 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Dynamo"
     }
+    "MarketAlignment": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
+    "MarketPulse": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
+    "MarketRegime": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "Positions": {
       "name": string
       "type": "sst.aws.Dynamo"
@@ -26,25 +38,9 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Function"
     }
-    "PullPrices": {
-      "type": "sst.aws.Cron"
-    }
-    "PullMacd": {
-      "type": "sst.aws.Cron"
-    }
-    "EvaluateAlerts": {
-      "type": "sst.aws.Cron"
-    }
     "SignalAlerts": {
       "name": string
       "type": "sst.aws.Dynamo"
-    }
-    "MarketPulse": {
-      "name": string
-      "type": "sst.aws.Dynamo"
-    }
-    "PullPulse": {
-      "type": "sst.aws.Cron"
     }
     "Stocks": {
       "name": string

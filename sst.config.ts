@@ -69,6 +69,28 @@ export default $config({
       }
     });
 
+    const marketRegime = new sst.aws.Dynamo("MarketRegime", {
+      fields: {
+        scale: "string",
+        date: "string"
+      },
+      primaryIndex: {
+        hashKey: "scale",
+        rangeKey: "date"
+      }
+    });
+
+    const marketAlignment = new sst.aws.Dynamo("MarketAlignment", {
+      fields: {
+        scope: "string",
+        alignedAt: "string"
+      },
+      primaryIndex: {
+        hashKey: "scope",
+        rangeKey: "alignedAt"
+      }
+    });
+
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
       link: [stocks, earnings, events],
@@ -125,8 +147,17 @@ export default $config({
       }
     });
 
+    new sst.aws.Cron("AlignMarketState", {
+      schedule: "rate(15 minutes)",
+      function: {
+        handler: "src/alignment.alignMarketState",
+        link: [marketPulse, marketRegime, marketAlignment, events],
+        timeout: "2 minutes"
+      }
+    });
+
     const api = new sst.aws.ApiGatewayV2("Api", {
-      link: [stocks, positions, events, earnings, signalAlerts, marketPulse, processStock],
+      link: [stocks, positions, events, earnings, signalAlerts, marketPulse, marketRegime, marketAlignment, processStock],
       transform: {
         route: {
           handler: {
@@ -157,6 +188,15 @@ export default $config({
     api.route("GET /pulse", "src/pulse.list");
     api.route("GET /pulse/{region}", "src/pulse.get");
 
+    api.route("GET /regime", "src/regime.list");
+    api.route("GET /regime/{scale}", "src/regime.getScale");
+    api.route("POST /regime/items", "src/regime.createItem");
+    api.route("POST /regime/{scale}/process", "src/regime.processScale");
+
+    api.route("GET /alignment", "src/alignment.current");
+    api.route("GET /alignment/history", "src/alignment.history");
+    api.route("POST /alignment/align", "src/alignment.triggerAlign");
+
     api.route("GET /positions", "src/positions.list");
     api.route("GET /positions/{accountId}/{symbol}", "src/positions.get");
     api.route("POST /positions", "src/positions.create");
@@ -169,6 +209,8 @@ export default $config({
       earningsTable: earnings.name,
       signalAlertsTable: signalAlerts.name,
       marketPulseTable: marketPulse.name,
+      marketRegimeTable: marketRegime.name,
+      marketAlignmentTable: marketAlignment.name,
       processStockFunction: processStock.name
     };
   }
