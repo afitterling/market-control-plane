@@ -40,6 +40,25 @@ export function requireBearerToken(event: APIGatewayProxyEventV2): APIGatewayPro
   return undefined;
 }
 
+export function requireSecretHeader(
+  event: APIGatewayProxyEventV2,
+  headerName: string,
+  envVar: string
+): APIGatewayProxyResultV2 | undefined {
+  const expected = process.env[envVar];
+  const headers = event.headers ?? {};
+  const lower = headerName.toLowerCase();
+  const supplied = String(
+    headers[lower] ?? headers[headerName] ?? headers[headerName.toUpperCase()] ?? ""
+  ).trim();
+
+  if (!expected || !isSameToken(supplied, expected)) {
+    return json({ error: "Unauthorized." }, 401);
+  }
+
+  return undefined;
+}
+
 export function parseJsonBody(event: APIGatewayProxyEventV2): unknown {
   if (!event.body) {
     return {};

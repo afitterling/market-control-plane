@@ -26,6 +26,10 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Dynamo"
     }
+    "MarketPulseSnapshot": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "MarketRegime": {
       "name": string
       "type": "sst.aws.Dynamo"

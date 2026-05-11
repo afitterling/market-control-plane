@@ -69,6 +69,17 @@ export default $config({
       }
     });
 
+    const marketPulseSnapshot = new sst.aws.Dynamo("MarketPulseSnapshot", {
+      fields: {
+        scope: "string",
+        snapshotAt: "string"
+      },
+      primaryIndex: {
+        hashKey: "scope",
+        rangeKey: "snapshotAt"
+      }
+    });
+
     const marketRegime = new sst.aws.Dynamo("MarketRegime", {
       fields: {
         scale: "string",
@@ -135,10 +146,10 @@ export default $config({
     });
 
     new sst.aws.Cron("PullPulse", {
-      schedule: "rate(20 minutes)",
+      schedule: $dev ? "rate(5 minutes)" : "rate(15 minutes)",
       function: {
         handler: "src/pulse.pullPulse",
-        link: [marketPulse, events],
+        link: [marketPulse, marketPulseSnapshot, events],
         timeout: "2 minutes",
         memory: "512 MB",
         environment: {
@@ -157,13 +168,26 @@ export default $config({
     });
 
     const api = new sst.aws.ApiGatewayV2("Api", {
-      link: [stocks, positions, events, earnings, signalAlerts, marketPulse, marketRegime, marketAlignment, processStock],
+      link: [
+        stocks,
+        positions,
+        events,
+        earnings,
+        signalAlerts,
+        marketPulse,
+        marketPulseSnapshot,
+        marketRegime,
+        marketAlignment,
+        processStock
+      ],
       transform: {
         route: {
           handler: {
             runtime: "nodejs22.x",
             environment: {
-              API_BEARER_TOKEN: process.env.API_BEARER_TOKEN ?? ""
+              API_BEARER_TOKEN: process.env.API_BEARER_TOKEN ?? "",
+              FMP_API_KEY: process.env.FMP_API_KEY ?? "",
+              PULSE_REFRESH_TOKEN: process.env.PULSE_REFRESH_TOKEN ?? ""
             }
           }
         }
@@ -191,6 +215,9 @@ export default $config({
     api.route("DELETE /alerts/{alertId}", "src/alerts.remove");
 
     api.route("GET /pulse", "src/pulse.list");
+    api.route("GET /pulse/snapshot", "src/pulse.snapshot");
+    api.route("GET /pulse/history", "src/pulse.history");
+    api.route("POST /pulse/refresh", "src/pulse.refresh");
     api.route("GET /pulse/{region}", "src/pulse.get");
 
     api.route("GET /regime", "src/regime.list");
@@ -218,6 +245,7 @@ export default $config({
       earningsTable: earnings.name,
       signalAlertsTable: signalAlerts.name,
       marketPulseTable: marketPulse.name,
+      marketPulseSnapshotTable: marketPulseSnapshot.name,
       marketRegimeTable: marketRegime.name,
       marketAlignmentTable: marketAlignment.name,
       processStockFunction: processStock.name

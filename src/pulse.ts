@@ -1,14 +1,26 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand
+} from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { publishEvent } from "./events";
-import { error, json, nowIso, requireBearerToken } from "./http";
+import { error, json, nowIso, requireBearerToken, requireSecretHeader } from "./http";
+import { fetchMarketData, type MarketDataSnapshot } from "./marketData";
 
 const PULSE_REGION_UPDATED = "PULSE_REGION_UPDATED";
 const PULSE_REGION_STALE = "PULSE_REGION_STALE";
+const PULSE_SNAPSHOT_TAKEN = "PULSE_SNAPSHOT_TAKEN";
 const MAX_LINKS_PER_REGION = 15;
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+const SNAPSHOT_RETENTION = 100;
+const SNAPSHOT_SCOPE = "global";
+const MARKET_DATA_TTL_MS = 60 * 60 * 1000;
 
 export type PulseStatus = "calm" | "watch" | "elevated" | "critical";
 
@@ -47,15 +59,35 @@ type NewsArticle = {
   publishedDate?: string;
 };
 
-const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+export type PulseOverall = {
+  status: PulseStatus;
+  score: number;
+  regionCount: number;
+  hotRegions: string[];
+  topThemes: string[];
+  summary: string;
+};
 
-export async function pullPulse(): Promise<{
+export type PulseSnapshot = {
+  scope: typeof SNAPSHOT_SCOPE;
+  snapshotAt: string;
+  overall: PulseOverall;
+  regions: PulseRow[];
+  marketData: MarketDataSnapshot;
+};
+
+export type PulseRunResult = {
   regionsTouched: number;
   regionsMarkedStale: number;
   articles: number;
   windowStart: string;
   windowEnd: string;
-}> {
+  snapshot: PulseSnapshot;
+};
+
+const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+export async function pullPulse(): Promise<PulseRunResult> {
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
     throw new Error("FMP_API_KEY is not configured.");
@@ -154,13 +186,242 @@ export async function pullPulse(): Promise<{
     });
   }
 
+  const previousSnapshot = await fetchLatestSnapshot();
+  const marketData = await getMarketDataWithCache(apiKey, previousSnapshot);
+  const regionsAfterRun = await scanAllRows();
+  const overall = computeOverall(regionsAfterRun);
+  const snapshot: PulseSnapshot = {
+    scope: SNAPSHOT_SCOPE,
+    snapshotAt: updatedAt,
+    overall,
+    regions: regionsAfterRun.sort((first, second) => second.criticality - first.criticality),
+    marketData
+  };
+
+  await persistSnapshot(snapshot);
+
   return {
     regionsTouched,
     regionsMarkedStale,
     articles: recent.length,
     windowStart: windowStart.toISOString(),
-    windowEnd: windowEnd.toISOString()
+    windowEnd: windowEnd.toISOString(),
+    snapshot
   };
+}
+
+async function fetchMarketDataSafely(apiKey: string): Promise<MarketDataSnapshot> {
+  try {
+    return await fetchMarketData(apiKey);
+  } catch (cause) {
+    console.error("fetchMarketData failed", { cause });
+    return {
+      vix: null,
+      oil: null,
+      gold: null,
+      dxy: null,
+      fx: [],
+      sectors: [],
+      sectorRotation: { leading: [], lagging: [], summary: "Market data unavailable." },
+      fetchedAt: new Date().toISOString()
+    };
+  }
+}
+
+async function getMarketDataWithCache(
+  apiKey: string,
+  previous: PulseSnapshot | undefined
+): Promise<MarketDataSnapshot> {
+  const cached = previous?.marketData;
+  if (cached?.fetchedAt) {
+    const ageMs = Date.now() - Date.parse(cached.fetchedAt);
+    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < MARKET_DATA_TTL_MS) {
+      return cached;
+    }
+  }
+  return fetchMarketDataSafely(apiKey);
+}
+
+function computeOverall(regions: PulseRow[]): PulseOverall {
+  const active = regions.filter((row) => !row.stale);
+  if (active.length === 0) {
+    return {
+      status: "calm",
+      score: 0,
+      regionCount: 0,
+      hotRegions: [],
+      topThemes: [],
+      summary: "No active regions."
+    };
+  }
+  const score = Math.round(
+    active.reduce((sum, row) => sum + Math.max(row.criticality, row.severity), 0) / active.length
+  );
+  const hotRegions = active
+    .filter((row) => row.status === "elevated" || row.status === "critical")
+    .map((row) => row.region)
+    .slice(0, 5);
+  const themeCounts = new Map<string, number>();
+  for (const row of active) {
+    for (const theme of row.topThemes) {
+      themeCounts.set(theme, (themeCounts.get(theme) ?? 0) + 1);
+    }
+  }
+  const topThemes = [...themeCounts.entries()]
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, 5)
+    .map(([theme]) => theme);
+  const status = bandFromOverall(score, hotRegions.length);
+  return {
+    status,
+    score,
+    regionCount: active.length,
+    hotRegions,
+    topThemes,
+    summary: buildOverallSummary(status, active.length, hotRegions, topThemes)
+  };
+}
+
+function bandFromOverall(score: number, hotCount: number): PulseStatus {
+  if (score >= 70 || hotCount >= 4) return "critical";
+  if (score >= 50 || hotCount >= 2) return "elevated";
+  if (score >= 25) return "watch";
+  return "calm";
+}
+
+function buildOverallSummary(
+  status: PulseStatus,
+  regionCount: number,
+  hotRegions: string[],
+  topThemes: string[]
+): string {
+  const hotPart = hotRegions.length > 0 ? `, hot: ${hotRegions.join(", ")}` : "";
+  const themesPart = topThemes.length > 0 ? `, themes: ${topThemes.join(", ")}` : "";
+  return `Overall ${status} across ${regionCount} region${regionCount === 1 ? "" : "s"}${hotPart}${themesPart}.`;
+}
+
+async function persistSnapshot(snapshot: PulseSnapshot): Promise<void> {
+  await documentClient.send(
+    new PutCommand({
+      TableName: Resource.MarketPulseSnapshot.name,
+      Item: snapshot
+    })
+  );
+  await trimSnapshots();
+  const previous = await fetchPreviousSnapshot(snapshot.snapshotAt);
+  if (!previous || previous.overall.status !== snapshot.overall.status) {
+    await publishEvent(PULSE_SNAPSHOT_TAKEN, {
+      action: PULSE_SNAPSHOT_TAKEN,
+      previousStatus: previous?.overall.status ?? null,
+      status: snapshot.overall.status,
+      score: snapshot.overall.score,
+      hotRegions: snapshot.overall.hotRegions,
+      vix: snapshot.marketData.vix?.value ?? null,
+      summary: snapshot.overall.summary
+    });
+  }
+}
+
+async function trimSnapshots(): Promise<void> {
+  const response = await documentClient.send(
+    new QueryCommand({
+      TableName: Resource.MarketPulseSnapshot.name,
+      KeyConditionExpression: "#scope = :scope",
+      ExpressionAttributeNames: { "#scope": "scope" },
+      ExpressionAttributeValues: { ":scope": SNAPSHOT_SCOPE },
+      ScanIndexForward: true,
+      Limit: SNAPSHOT_RETENTION + 50
+    })
+  );
+  const items = (response.Items ?? []) as PulseSnapshot[];
+  if (items.length <= SNAPSHOT_RETENTION) return;
+  const toDelete = items.slice(0, items.length - SNAPSHOT_RETENTION);
+  for (const item of toDelete) {
+    await documentClient.send(
+      new DeleteCommand({
+        TableName: Resource.MarketPulseSnapshot.name,
+        Key: { scope: item.scope, snapshotAt: item.snapshotAt }
+      })
+    );
+  }
+}
+
+async function fetchLatestSnapshot(): Promise<PulseSnapshot | undefined> {
+  const response = await documentClient.send(
+    new QueryCommand({
+      TableName: Resource.MarketPulseSnapshot.name,
+      KeyConditionExpression: "#scope = :scope",
+      ExpressionAttributeNames: { "#scope": "scope" },
+      ExpressionAttributeValues: { ":scope": SNAPSHOT_SCOPE },
+      ScanIndexForward: false,
+      Limit: 1
+    })
+  );
+  return ((response.Items ?? []) as PulseSnapshot[])[0];
+}
+
+async function fetchPreviousSnapshot(excludingKey: string): Promise<PulseSnapshot | undefined> {
+  const response = await documentClient.send(
+    new QueryCommand({
+      TableName: Resource.MarketPulseSnapshot.name,
+      KeyConditionExpression: "#scope = :scope",
+      ExpressionAttributeNames: { "#scope": "scope" },
+      ExpressionAttributeValues: { ":scope": SNAPSHOT_SCOPE },
+      ScanIndexForward: false,
+      Limit: 2
+    })
+  );
+  const rows = (response.Items ?? []) as PulseSnapshot[];
+  return rows.find((row) => row.snapshotAt !== excludingKey);
+}
+
+export async function refresh(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const unauthorized = requireSecretHeader(event, "x-refresh-token", "PULSE_REFRESH_TOKEN");
+  if (unauthorized) {
+    return unauthorized;
+  }
+  try {
+    const result = await pullPulse();
+    return json({ run: result }, 201);
+  } catch (cause) {
+    console.error("Forced pulse refresh failed", { cause });
+    return error("Pulse refresh failed.", 500);
+  }
+}
+
+export async function snapshot(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const unauthorized = requireBearerToken(event);
+  if (unauthorized) {
+    return unauthorized;
+  }
+  const latest = await fetchLatestSnapshot();
+  if (!latest) {
+    return json({ snapshot: null });
+  }
+  return json({ snapshot: latest });
+}
+
+export async function history(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const unauthorized = requireBearerToken(event);
+  if (unauthorized) {
+    return unauthorized;
+  }
+  const limitParam = Number(event.queryStringParameters?.limit ?? SNAPSHOT_RETENTION);
+  const limit = Number.isFinite(limitParam)
+    ? Math.min(Math.max(Math.trunc(limitParam), 1), SNAPSHOT_RETENTION)
+    : SNAPSHOT_RETENTION;
+  const response = await documentClient.send(
+    new QueryCommand({
+      TableName: Resource.MarketPulseSnapshot.name,
+      KeyConditionExpression: "#scope = :scope",
+      ExpressionAttributeNames: { "#scope": "scope" },
+      ExpressionAttributeValues: { ":scope": SNAPSHOT_SCOPE },
+      ScanIndexForward: false,
+      Limit: limit
+    })
+  );
+  const snapshots = (response.Items ?? []) as PulseSnapshot[];
+  return json({ count: snapshots.length, snapshots });
 }
 
 export async function scanAllPulse(): Promise<PulseRow[]> {

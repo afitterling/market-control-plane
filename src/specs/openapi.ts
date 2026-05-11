@@ -199,6 +199,41 @@ export const openApiSpec = {
         }
       }
     },
+    "/pulse/snapshot": {
+      get: {
+        tags: ["Pulse"],
+        summary: "Latest unified pulse snapshot (overall + regions + market data)",
+        responses: {
+          "200": { description: "Snapshot" },
+          "401": { $ref: "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/pulse/history": {
+      get: {
+        tags: ["Pulse"],
+        summary: "Recent snapshots (max 100 retained)",
+        parameters: [{ name: "limit", in: "query", schema: { type: "integer", maximum: 100 } }],
+        responses: {
+          "200": { description: "Snapshot history" },
+          "401": { $ref: "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/pulse/refresh": {
+      post: {
+        tags: ["Pulse"],
+        summary: "Force a pulse run (news + regions + market data + snapshot)",
+        description:
+          "Requires the PULSE_REFRESH_TOKEN via the X-Refresh-Token header; the regular Bearer token does not authorize this endpoint.",
+        security: [{ refreshToken: [] }],
+        responses: {
+          "201": { description: "Run result with snapshot" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "500": { description: "Pulse refresh failed" }
+        }
+      }
+    },
     "/regime": {
       get: {
         tags: ["Regime"],
@@ -361,6 +396,12 @@ export const openApiSpec = {
         type: "http",
         scheme: "bearer",
         description: "API_BEARER_TOKEN configured on the deployment"
+      },
+      refreshToken: {
+        type: "apiKey",
+        in: "header",
+        name: "X-Refresh-Token",
+        description: "PULSE_REFRESH_TOKEN configured on the deployment; only authorizes /pulse/refresh"
       }
     },
     responses: {
