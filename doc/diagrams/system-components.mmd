@@ -1,0 +1,129 @@
+%% rendered: ./system-components.svg
+%% regenerate: mmdc -i system-components.mmd -o system-components.svg -b transparent -p puppeteer.json
+flowchart TB
+  Client((External Client))
+  FMP[("FMP REST API")]
+
+  subgraph API ["API Layer — ApiGatewayV2 Api"]
+    direction TB
+    api_health["GET /<br/>health"]
+    api_stocks["Stocks<br/>GET /stocks · GET /stocks/{symbol}<br/>POST /stocks · POST /stocks/batch"]
+    api_industries["Industries<br/>GET /industries · POST /industries/backfill<br/>GET /industries/{industry}<br/>GET /industries/performance<br/>GET /industries/{industry}/performance"]
+    api_earnings["Earnings<br/>GET /earnings/{symbol}"]
+    api_alerts["Alerts<br/>GET · POST · DELETE /alerts*"]
+    api_pulse["Pulse<br/>GET /pulse · /pulse/tile · /pulse/sectors<br/>GET /pulse/snapshot · /pulse/history · /pulse/{region}<br/>POST /pulse/refresh"]
+    api_regime["Regime<br/>GET · POST /regime*"]
+    api_alignment["Alignment<br/>GET · POST /alignment*"]
+    api_positions["Positions<br/>GET · POST /positions*"]
+    api_events["Events<br/>GET /events (long-poll)"]
+    api_docs["Docs<br/>GET /docs · /openapi.json"]
+  end
+
+  subgraph Compute ["Compute — Lambda Function"]
+    fn_process["ProcessStock<br/>per-symbol earnings backfill<br/>invoked async on stock create"]
+  end
+
+  subgraph Schedulers ["Schedulers — EventBridge Cron"]
+    cr_prices["PullPrices<br/>rate(1 min)<br/>FMP batch quotes → Stocks"]
+    cr_macd["PullMacd<br/>rate(15 min)<br/>multi-timeframe MACD readings"]
+    cr_alerts["EvaluateAlerts<br/>rate(30 min)<br/>signal evaluation, gated by market hours"]
+    cr_pulse["PullPulse<br/>rate(5/15 min)<br/>news scoring per region + snapshot"]
+    cr_align["AlignMarketState<br/>rate(15 min)<br/>merge regime + pulse → alignment"]
+    cr_hist["RefreshStockHistoricals<br/>rate(1 day)<br/>~760 EOD closes per symbol"]
+    cr_returns["RefreshStockReturns<br/>rate(5 min)<br/>1D/7D/1M/3M/6M/1Y/2Y returns"]
+    cr_enrich["EnrichStockFundamentals<br/>rate(2 h)<br/>profile · metrics · margins · EPS"]
+  end
+
+  subgraph Data ["Data — DynamoDB Tables"]
+    db_stocks[("Stocks<br/>hashKey: symbol")]
+    db_positions[("Positions<br/>hashKey: accountId<br/>rangeKey: symbol")]
+    db_events[("Events<br/>hashKey: streamId<br/>rangeKey: eventId")]
+    db_earnings[("Earnings<br/>hashKey: symbol<br/>rangeKey: period")]
+    db_alerts[("SignalAlerts<br/>hashKey: alertId")]
+    db_pulse[("MarketPulse<br/>hashKey: region")]
+    db_pulse_snap[("MarketPulseSnapshot<br/>hashKey: scope<br/>rangeKey: snapshotAt")]
+    db_regime[("MarketRegime<br/>hashKey: scale<br/>rangeKey: date")]
+    db_align[("MarketAlignment<br/>hashKey: scope<br/>rangeKey: alignedAt")]
+    db_industries[("Industries<br/>hashKey: industry")]
+  end
+
+  subgraph Secrets ["Secrets — sst.Secret"]
+    sec_bearer["API_BEARER_TOKEN"]
+    sec_fmp["FMP_API_KEY"]
+    sec_refresh["PULSE_REFRESH_TOKEN"]
+  end
+
+  Client -- "HTTPS · Bearer auth" --> API
+  API -. authenticates .- sec_bearer
+  api_pulse -. POST /pulse/refresh body token .- sec_refresh
+
+  api_stocks --> db_stocks
+  api_stocks --> db_events
+  api_stocks -- "InvokeAsync" --> fn_process
+  api_stocks -- "profile lookup" --> FMP
+  api_industries --> db_industries
+  api_industries --> db_stocks
+  api_industries -- "backfill: screener + profiles" --> FMP
+  api_industries -. uses .- sec_fmp
+  api_pulse --> db_pulse
+  api_pulse --> db_pulse_snap
+  api_pulse -- "manual refresh" --> FMP
+  api_regime --> db_regime
+  api_regime --> db_pulse
+  api_regime --> db_events
+  api_alignment --> db_align
+  api_alignment --> db_regime
+  api_alignment --> db_pulse
+  api_alerts --> db_alerts
+  api_alerts --> db_events
+  api_earnings --> db_earnings
+  api_events --> db_events
+  api_positions --> db_positions
+
+  fn_process --> db_stocks
+  fn_process --> db_earnings
+  fn_process --> db_events
+  fn_process -- "earnings + quotes" --> FMP
+  fn_process -. uses .- sec_fmp
+
+  cr_prices --> db_stocks
+  cr_prices --> FMP
+  cr_prices -. uses .- sec_fmp
+  cr_macd --> db_stocks
+  cr_macd --> FMP
+  cr_macd -. uses .- sec_fmp
+  cr_alerts --> db_stocks
+  cr_alerts --> db_alerts
+  cr_alerts --> db_events
+  cr_pulse --> db_pulse
+  cr_pulse --> db_pulse_snap
+  cr_pulse --> db_events
+  cr_pulse --> FMP
+  cr_pulse -. uses .- sec_fmp
+  cr_align --> db_pulse
+  cr_align --> db_regime
+  cr_align --> db_align
+  cr_align --> db_events
+  cr_hist --> db_stocks
+  cr_hist --> FMP
+  cr_hist -. uses .- sec_fmp
+  cr_returns --> db_stocks
+  cr_returns --> FMP
+  cr_returns -. uses .- sec_fmp
+  cr_enrich --> db_stocks
+  cr_enrich -- "profile · key-metrics-ttm · income-statement · earnings" --> FMP
+  cr_enrich -. uses .- sec_fmp
+
+  classDef route fill:#fefce8,stroke:#eab308,color:#713f12,font-weight:bold
+  classDef cron fill:#f0fdf4,stroke:#22c55e,color:#166534,font-weight:bold
+  classDef table fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,font-weight:bold
+  classDef secret fill:#fff7ed,stroke:#fb923c,color:#7c2d12,font-weight:bold
+  classDef fn fill:#fdf4ff,stroke:#a855f7,color:#581c87,font-weight:bold
+  classDef ext fill:#fef2f2,stroke:#ef4444,color:#7f1d1d,font-weight:bold
+
+  class api_health,api_stocks,api_industries,api_earnings,api_alerts,api_pulse,api_regime,api_alignment,api_positions,api_events,api_docs route
+  class cr_prices,cr_macd,cr_alerts,cr_pulse,cr_align,cr_hist,cr_returns,cr_enrich cron
+  class db_stocks,db_positions,db_events,db_earnings,db_alerts,db_pulse,db_pulse_snap,db_regime,db_align,db_industries table
+  class sec_bearer,sec_fmp,sec_refresh secret
+  class fn_process fn
+  class FMP,Client ext

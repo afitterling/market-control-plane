@@ -21,6 +21,14 @@ All AWS resources are declared in [`sst.config.ts`](./sst.config.ts) and deploye
 
 Source: [`doc/diagrams/sst-architecture.mmd`](./doc/diagrams/sst-architecture.mmd).
 
+### Component view
+
+A higher-level component diagram that groups API routes, schedulers, the ProcessStock function, DynamoDB tables, and secrets — with edges annotated by data flow — lives at:
+
+![System components](./doc/diagrams/system-components.svg)
+
+Source: [`doc/diagrams/system-components.mmd`](./doc/diagrams/system-components.mmd).
+
 ## 1. Market Regime Detection Capabilities
 
 The system can detect:
