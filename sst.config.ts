@@ -168,6 +168,36 @@ export default $config({
       }
     });
 
+    new sst.aws.Cron("RefreshStockHistoricals", {
+      schedule: "rate(1 day)",
+      function: {
+        handler: "src/stockEnrich.refreshHistoricals",
+        link: [stocks, fmpApiKey],
+        timeout: "15 minutes",
+        memory: "1024 MB"
+      }
+    });
+
+    new sst.aws.Cron("RefreshStockReturns", {
+      schedule: "rate(5 minutes)",
+      function: {
+        handler: "src/stockEnrich.refreshReturns",
+        link: [stocks, fmpApiKey],
+        timeout: "5 minutes",
+        memory: "1024 MB"
+      }
+    });
+
+    new sst.aws.Cron("EnrichStockFundamentals", {
+      schedule: "rate(2 hours)",
+      function: {
+        handler: "src/stockEnrich.enrichFundamentals",
+        link: [stocks, fmpApiKey],
+        timeout: "15 minutes",
+        memory: "1024 MB"
+      }
+    });
+
     const api = new sst.aws.ApiGatewayV2("Api", {
       link: [
         stocks,
@@ -224,7 +254,9 @@ export default $config({
 
     api.route("POST /industries/backfill", "src/industries.backfill");
     api.route("GET /industries", "src/industries.list");
+    api.route("GET /industries/performance", "src/industries.performance");
     api.route("GET /industries/{industry}", "src/industries.get");
+    api.route("GET /industries/{industry}/performance", "src/industries.industryDetail");
 
     api.route("GET /regime", "src/regime.list");
     api.route("GET /regime/{scale}", "src/regime.getScale");

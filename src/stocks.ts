@@ -31,11 +31,28 @@ type StockItem = {
   currency?: string;
   sector?: string;
   industry?: string;
+  country?: string;
+  isEtf?: boolean;
+  isFund?: boolean;
+  isAdr?: boolean;
+  tags?: string[];
   metadata?: unknown;
   createdAt: string;
   updatedAt: string;
   processingState?: ProcessingState;
   executedActions?: ExecutedAction[];
+};
+
+type ProfileLookup = {
+  name?: string;
+  exchange?: string;
+  currency?: string;
+  sector?: string;
+  industry?: string;
+  country?: string;
+  isEtf?: boolean;
+  isFund?: boolean;
+  isAdr?: boolean;
 };
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -125,12 +142,13 @@ export async function create(event: APIGatewayProxyEventV2): Promise<APIGatewayP
     );
   }
 
+  const enriched = await applyProfileTags(stock.item);
   const executedActions = [
-    await executeStockAction(STOCK_NEW_ADDED_ACTION, stock.item),
-    await executeStockAction(STOCK_PROCESS_ACTION, stock.item)
+    await executeStockAction(STOCK_NEW_ADDED_ACTION, enriched),
+    await executeStockAction(STOCK_PROCESS_ACTION, enriched)
   ];
   const item: StockItem = {
-    ...stock.item,
+    ...enriched,
     processingState: "being_processed",
     executedActions
   };
@@ -201,13 +219,14 @@ export async function batchCreate(event: APIGatewayProxyEventV2): Promise<APIGat
     }
   }
 
+  const enrichedStocks = await Promise.all(newStocks.map((stock) => applyProfileTags(stock)));
   const newExecutedActionsPerStock = await Promise.all(
-    newStocks.map(async (stock) => [
+    enrichedStocks.map(async (stock) => [
       await executeStockAction(STOCK_NEW_ADDED_ACTION, stock),
       await executeStockAction(STOCK_PROCESS_ACTION, stock)
     ])
   );
-  const newItems: StockItem[] = newStocks.map((stock, index) => ({
+  const newItems: StockItem[] = enrichedStocks.map((stock, index) => ({
     ...stock,
     processingState: "being_processed",
     executedActions: newExecutedActionsPerStock[index]
@@ -373,11 +392,91 @@ function normalizeStock(input: unknown): { ok: true; item: StockItem } | { ok: f
       ...optionalString("currency", input.currency),
       ...optionalString("sector", input.sector),
       ...optionalString("industry", input.industry),
+      ...optionalString("country", input.country),
+      ...(Array.isArray(input.tags)
+        ? { tags: normalizeUserTags(input.tags) }
+        : {}),
       ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
       createdAt: now,
       updatedAt: now
     }
   };
+}
+
+function normalizeUserTags(tags: unknown[]): string[] {
+  const out = new Set<string>();
+  for (const tag of tags) {
+    const value = String(tag ?? "").trim();
+    if (value) out.add(value);
+  }
+  return [...out];
+}
+
+async function fetchProfile(symbol: string): Promise<ProfileLookup | undefined> {
+  const apiKey = Resource.FMP_API_KEY.value;
+  if (!apiKey) return undefined;
+  const url = `https://financialmodelingprep.com/stable/profile?symbol=${encodeURIComponent(symbol)}&apikey=${encodeURIComponent(apiKey)}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return undefined;
+    const data = (await response.json()) as unknown;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || typeof row !== "object") return undefined;
+    const r = row as Record<string, unknown>;
+    const pick = (key: string): string | undefined => {
+      const value = r[key];
+      return typeof value === "string" && value.trim() ? value.trim() : undefined;
+    };
+    return {
+      name: pick("companyName") ?? pick("name"),
+      exchange: pick("exchange") ?? pick("exchangeShortName"),
+      currency: pick("currency"),
+      sector: pick("sector"),
+      industry: pick("industry"),
+      country: pick("country"),
+      isEtf: r.isEtf === true,
+      isFund: r.isFund === true,
+      isAdr: r.isAdr === true
+    };
+  } catch (cause) {
+    console.error("stocks.fetchProfile failed", { symbol, cause });
+    return undefined;
+  }
+}
+
+async function applyProfileTags(stock: StockItem): Promise<StockItem> {
+  const profile = await fetchProfile(stock.symbol);
+  const merged: StockItem = {
+    ...stock,
+    name: stock.name ?? profile?.name,
+    exchange: stock.exchange ?? profile?.exchange,
+    currency: stock.currency ?? profile?.currency,
+    sector: stock.sector ?? profile?.sector,
+    industry: stock.industry ?? profile?.industry,
+    country: stock.country ?? profile?.country,
+    isEtf: profile?.isEtf ?? stock.isEtf,
+    isFund: profile?.isFund ?? stock.isFund,
+    isAdr: profile?.isAdr ?? stock.isAdr
+  };
+  merged.tags = buildTags(merged);
+  return merged;
+}
+
+function buildTags(stock: StockItem): string[] {
+  const tags = new Set<string>();
+  for (const value of stock.tags ?? []) {
+    if (value && value.trim()) tags.add(value.trim());
+  }
+  if (stock.sector) tags.add(`sector:${stock.sector}`);
+  if (stock.industry) tags.add(`industry:${stock.industry}`);
+  if (stock.exchange) tags.add(`exchange:${stock.exchange}`);
+  if (stock.country) tags.add(`country:${stock.country}`);
+  if (stock.currency) tags.add(`currency:${stock.currency}`);
+  if (stock.isEtf) tags.add("type:etf");
+  if (stock.isFund) tags.add("type:fund");
+  if (stock.isAdr) tags.add("type:adr");
+  if (!stock.isEtf && !stock.isFund && !stock.isAdr) tags.add("type:equity");
+  return [...tags];
 }
 
 function optionalString(key: keyof StockItem, value: unknown): Partial<StockItem> {

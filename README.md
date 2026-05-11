@@ -1,5 +1,7 @@
 # Market Control Plane
 
+_Last updated: 2026-05-11_
+
 An allocation market control plane that processes financial data — Financial Modeling Prep feeds and other inputs — and exposes it to downstream trading platforms.
 
 The system:
