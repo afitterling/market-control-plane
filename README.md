@@ -1,6 +1,6 @@
 # Market Control Plane
 
-_Last updated: 2026-05-11 16:12 UTC_
+_Last updated: 2026-05-12_
 
 An allocation market control plane that processes financial data — Financial Modeling Prep feeds and other inputs — and exposes it to downstream trading platforms.
 
@@ -28,6 +28,12 @@ A higher-level component diagram that groups API routes, schedulers, the Process
 ![System components](./doc/diagrams/system-components.svg)
 
 Source: [`doc/diagrams/system-components.mmd`](./doc/diagrams/system-components.mmd).
+
+### Realtime: Kinesis streams + WebSocket fan-out
+
+Three Kinesis Data Streams (`Ticks`, `Signals`, `PulseEvents`) carry high-volume events; a WebSocket API (`RealtimeApi`) fans them out to subscribed clients (browser, Remix server, `wscat`, etc.). Subscriptions support per-symbol / per-region / per-kind filters.
+
+Full contract, subscription protocol, and Remix code samples (native `WebSocket` and server-forwarded SSE): [`doc/realtime.md`](./doc/realtime.md).
 
 ## 1. Market Regime Detection Capabilities
 

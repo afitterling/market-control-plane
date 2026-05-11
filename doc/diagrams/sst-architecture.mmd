@@ -18,6 +18,23 @@ flowchart LR
     T_REGIME[MarketRegime]
     T_ALIGN[MarketAlignment]
     T_INDUSTRIES[Industries]
+    T_WS[WsConnections]
+  end
+
+  subgraph Streams["sst.aws.KinesisStream"]
+    K_TICKS[Ticks]
+    K_SIGNALS[Signals]
+    K_PULSE_EV[PulseEvents]
+  end
+
+  subgraph Realtime["sst.aws.ApiGatewayWebSocket"]
+    RT_API["RealtimeApi<br/>$connect · $disconnect · $default"]
+  end
+
+  subgraph Broadcasters["Stream subscribers"]
+    B_TICKS[BroadcastTicks]
+    B_SIGNALS[BroadcastSignals]
+    B_PULSE[BroadcastPulseEvents]
   end
 
   subgraph Crons["sst.aws.Cron"]
@@ -87,6 +104,21 @@ flowchart LR
 
   C_PRICES --> T_STOCKS
   C_PRICES --> FMP
+  C_PRICES --> K_TICKS
+  C_PULSE --> K_PULSE_EV
+  C_ALIGN --> K_SIGNALS
+
+  K_TICKS --> B_TICKS
+  K_SIGNALS --> B_SIGNALS
+  K_PULSE_EV --> B_PULSE
+  B_TICKS --> T_WS
+  B_SIGNALS --> T_WS
+  B_PULSE --> T_WS
+  B_TICKS --> RT_API
+  B_SIGNALS --> RT_API
+  B_PULSE --> RT_API
+  RT_API --> T_WS
+  Client -. wss .-> RT_API
   C_MACD --> T_STOCKS
   C_MACD --> FMP
   C_ALERTS --> T_STOCKS
@@ -122,7 +154,13 @@ flowchart LR
   classDef ext fill:#fef2f2,stroke:#ef4444,color:#7f1d1d
 
   class SEC_BEARER,SEC_FMP,SEC_REFRESH secret
-  class T_STOCKS,T_POSITIONS,T_EVENTS,T_EARNINGS,T_ALERTS,T_PULSE,T_PULSE_SNAP,T_REGIME,T_ALIGN,T_INDUSTRIES table
+  class T_STOCKS,T_POSITIONS,T_EVENTS,T_EARNINGS,T_ALERTS,T_PULSE,T_PULSE_SNAP,T_REGIME,T_ALIGN,T_INDUSTRIES,T_WS table
+  classDef stream fill:#fef3c7,stroke:#f59e0b,color:#78350f
+  classDef rt fill:#ecfeff,stroke:#06b6d4,color:#155e75
+  classDef broadcaster fill:#fdf4ff,stroke:#c084fc,color:#581c87
+  class K_TICKS,K_SIGNALS,K_PULSE_EV stream
+  class RT_API rt
+  class B_TICKS,B_SIGNALS,B_PULSE broadcaster
   class C_PRICES,C_MACD,C_ALERTS,C_PULSE,C_ALIGN,C_HIST,C_RETURNS,C_ENRICH cron
   class F_PROCESS fn
   class R_HEALTH,R_EVENTS,R_DOCS,R_STOCKS,R_EARNINGS,R_ALERTS,R_PULSE,R_REGIME,R_ALIGNMENT,R_POSITIONS,R_INDUSTRIES route

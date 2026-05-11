@@ -12,6 +12,7 @@ import { Resource } from "sst";
 import { publishEvent } from "./events";
 import { error, json, nowIso, parseJsonBody, requireBearerToken, tokenMatches } from "./http";
 import { fetchMarketData, type MarketDataSnapshot, type RiskState } from "./marketData";
+import { putPulseEvent } from "./streams";
 
 const PULSE_REGION_UPDATED = "PULSE_REGION_UPDATED";
 const PULSE_REGION_STALE = "PULSE_REGION_STALE";
@@ -357,6 +358,18 @@ async function persistSnapshot(snapshot: PulseSnapshot): Promise<void> {
       summary: snapshot.overall.summary
     });
   }
+  await putPulseEvent({
+    type: PULSE_SNAPSHOT_TAKEN,
+    status: snapshot.overall.status,
+    score: snapshot.overall.score,
+    payload: {
+      hotRegions: snapshot.overall.hotRegions,
+      riskState: snapshot.riskState,
+      vix: snapshot.marketData.vix?.value ?? null,
+      summary: snapshot.overall.summary
+    },
+    at: snapshot.snapshotAt
+  });
 }
 
 async function trimSnapshots(): Promise<void> {

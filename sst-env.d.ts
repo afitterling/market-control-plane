@@ -58,11 +58,32 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Function"
     }
+    "PulseEvents": {
+      "name": string
+      "type": "sst.aws.KinesisStream"
+    }
+    "RealtimeApi": {
+      "managementEndpoint": string
+      "type": "sst.aws.ApiGatewayWebSocket"
+      "url": string
+    }
     "SignalAlerts": {
       "name": string
       "type": "sst.aws.Dynamo"
     }
+    "Signals": {
+      "name": string
+      "type": "sst.aws.KinesisStream"
+    }
     "Stocks": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
+    "Ticks": {
+      "name": string
+      "type": "sst.aws.KinesisStream"
+    }
+    "WsConnections": {
       "name": string
       "type": "sst.aws.Dynamo"
     }

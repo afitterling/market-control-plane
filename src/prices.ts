@@ -2,6 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { Resource } from "sst";
 import { nowIso } from "./http";
+import { putTicks } from "./streams";
 
 const PASSES_PER_INVOCATION = 2;
 const PASS_GAP_MS = 30_000;
@@ -59,6 +60,17 @@ async function runPass(apiKey: string): Promise<{ updated: number; symbols: numb
     const chunk = symbols.slice(index, index + FMP_BATCH_SIZE);
     const quotes = await fetchQuotes(chunk, apiKey);
     await Promise.all(quotes.map((quote) => writeQuote(quote)));
+    await putTicks(
+      quotes
+        .filter((quote) => typeof quote.symbol === "string" && typeof quote.price === "number")
+        .map((quote) => ({
+          symbol: quote.symbol as string,
+          price: quote.price as number,
+          changePercent: typeof quote.changePercentage === "number" ? quote.changePercentage : undefined,
+          source: "pullPrices",
+          at: nowIso()
+        }))
+    );
     updated += quotes.length;
   }
   return { updated, symbols: symbols.length };

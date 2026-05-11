@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.808.0",
     "@aws-sdk/client-dynamodb": "^3.808.0",
+    "@aws-sdk/client-kinesis": "^3.808.0",
     "@aws-sdk/client-lambda": "^3.1045.0",
     "@aws-sdk/lib-dynamodb": "^3.808.0"
   },

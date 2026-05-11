@@ -6,3 +6,5 @@ node_modules/
 dist/
 coverage/
 doc/diagrams/puppeteer.json
+.DS_Store
+**/.DS_Store

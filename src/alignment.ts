@@ -5,6 +5,7 @@ import { Resource } from "sst";
 import { publishEvent } from "./events";
 import { error, json, nowIso, requireBearerToken } from "./http";
 import { scanAllPulse, type PulseRow, type PulseStatus } from "./pulse";
+import { putSignal } from "./streams";
 import {
   computeAndStoreRegime,
   type RegimeClassification,
@@ -108,6 +109,18 @@ export async function alignMarketState(): Promise<MarketAlignmentRow> {
       pulseRiskScore: row.composite.pulseRiskScore,
       hotRegions: row.composite.hotRegions,
       summary: row.composite.summary
+    });
+    await putSignal({
+      kind: "alignment",
+      riskLevel: row.composite.riskLevel,
+      bias: row.composite.bias,
+      payload: {
+        biasScore: row.composite.biasScore,
+        pulseRiskScore: row.composite.pulseRiskScore,
+        hotRegions: row.composite.hotRegions,
+        summary: row.composite.summary
+      },
+      at: row.alignedAt
     });
   }
 

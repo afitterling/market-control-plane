@@ -22,6 +22,27 @@ declare module "sst" {
       name: string;
       type: "sst.aws.Dynamo";
     };
+    WsConnections: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
+    Ticks: {
+      name: string;
+      type: "sst.aws.KinesisStream";
+    };
+    Signals: {
+      name: string;
+      type: "sst.aws.KinesisStream";
+    };
+    PulseEvents: {
+      name: string;
+      type: "sst.aws.KinesisStream";
+    };
+    RealtimeApi: {
+      url: string;
+      managementEndpoint: string;
+      type: "sst.aws.ApiGatewayWebSocket";
+    };
     Positions: {
       name: string;
       type: "sst.aws.Dynamo";

@@ -115,6 +115,19 @@ export default $config({
       }
     });
 
+    const wsConnections = new sst.aws.Dynamo("WsConnections", {
+      fields: {
+        connectionId: "string"
+      },
+      primaryIndex: {
+        hashKey: "connectionId"
+      }
+    });
+
+    const ticksStream = new sst.aws.KinesisStream("Ticks");
+    const signalsStream = new sst.aws.KinesisStream("Signals");
+    const pulseEventsStream = new sst.aws.KinesisStream("PulseEvents");
+
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
       link: [stocks, earnings, events, fmpApiKey],
@@ -125,7 +138,7 @@ export default $config({
       schedule: "rate(1 minute)",
       function: {
         handler: "src/prices.pullPrices",
-        link: [stocks, fmpApiKey],
+        link: [stocks, fmpApiKey, ticksStream],
         timeout: "90 seconds"
       }
     });
@@ -153,7 +166,7 @@ export default $config({
       schedule: $dev ? "rate(5 minutes)" : "rate(15 minutes)",
       function: {
         handler: "src/pulse.pullPulse",
-        link: [marketPulse, marketPulseSnapshot, events, fmpApiKey],
+        link: [marketPulse, marketPulseSnapshot, events, fmpApiKey, pulseEventsStream],
         timeout: "2 minutes",
         memory: "512 MB"
       }
@@ -163,7 +176,7 @@ export default $config({
       schedule: "rate(15 minutes)",
       function: {
         handler: "src/alignment.alignMarketState",
-        link: [marketPulse, marketRegime, marketAlignment, events],
+        link: [marketPulse, marketRegime, marketAlignment, events, signalsStream],
         timeout: "2 minutes"
       }
     });
@@ -213,7 +226,10 @@ export default $config({
         processStock,
         apiBearerToken,
         fmpApiKey,
-        pulseRefreshToken
+        pulseRefreshToken,
+        ticksStream,
+        signalsStream,
+        pulseEventsStream
       ],
       transform: {
         route: {
@@ -271,10 +287,47 @@ export default $config({
     api.route("GET /positions/{accountId}/{symbol}", "src/positions.get");
     api.route("POST /positions", "src/positions.create");
 
+    const realtime = new sst.aws.ApiGatewayWebSocket("RealtimeApi");
+
+    realtime.route("$connect", {
+      handler: "src/wsConnection.connect",
+      link: [wsConnections, apiBearerToken]
+    });
+    realtime.route("$disconnect", {
+      handler: "src/wsConnection.disconnect",
+      link: [wsConnections]
+    });
+    realtime.route("$default", {
+      handler: "src/wsConnection.defaultRoute",
+      link: [wsConnections]
+    });
+
+    const realtimeEndpoint = $interpolate`https://${realtime.url.apply((value: string) => value.replace(/^wss?:\/\//, "").replace(/\/$/, ""))}`;
+
+    ticksStream.subscribe("BroadcastTicks", {
+      handler: "src/streamConsumer.broadcastTicks",
+      link: [wsConnections, realtime],
+      environment: { WS_API_ENDPOINT: realtimeEndpoint },
+      timeout: "1 minute"
+    });
+    signalsStream.subscribe("BroadcastSignals", {
+      handler: "src/streamConsumer.broadcastSignals",
+      link: [wsConnections, realtime],
+      environment: { WS_API_ENDPOINT: realtimeEndpoint },
+      timeout: "1 minute"
+    });
+    pulseEventsStream.subscribe("BroadcastPulseEvents", {
+      handler: "src/streamConsumer.broadcastPulseEvents",
+      link: [wsConnections, realtime],
+      environment: { WS_API_ENDPOINT: realtimeEndpoint },
+      timeout: "1 minute"
+    });
+
     const apiBase = api.url.apply((value: string) => value.replace(/\/$/, ""));
 
     return {
       api: api.url,
+      realtime: realtime.url,
       docs: $interpolate`${apiBase}/docs`,
       openapi: $interpolate`${apiBase}/openapi.json`,
       stocksTable: stocks.name,
