@@ -1,6 +1,6 @@
 # Market Control Plane
 
-_Last updated: 2026-05-11_
+_Last updated: 2026-05-11 16:12 UTC_
 
 An allocation market control plane that processes financial data — Financial Modeling Prep feeds and other inputs — and exposes it to downstream trading platforms.
 
@@ -12,6 +12,14 @@ The system:
 - dynamically aligns allocation
 
 The control plane is the policy and signal layer: it ingests market and fundamental data, classifies the current regime, scores instruments, and emits allocation signals that execution venues consume. Trading platforms remain responsible for order routing and execution; the control plane decides *what* should be held and *why*.
+
+## 0. Architecture
+
+All AWS resources are declared in [`sst.config.ts`](./sst.config.ts) and deployed via SST. The diagram below maps every component — secrets, Dynamo tables, scheduled crons, the ProcessStock function, and every API Gateway route — plus the links between them and the external FMP feed.
+
+![SST architecture](./doc/diagrams/sst-architecture.svg)
+
+Source: [`doc/diagrams/sst-architecture.mmd`](./doc/diagrams/sst-architecture.mmd).
 
 ## 1. Market Regime Detection Capabilities
 

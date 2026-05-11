@@ -1,0 +1,129 @@
+%% rendered: ./sst-architecture.svg
+%% regenerate: mmdc -i sst-architecture.mmd -o sst-architecture.svg -b transparent
+flowchart LR
+  subgraph Secrets["sst.Secret"]
+    SEC_BEARER[API_BEARER_TOKEN]
+    SEC_FMP[FMP_API_KEY]
+    SEC_REFRESH[PULSE_REFRESH_TOKEN]
+  end
+
+  subgraph Tables["sst.aws.Dynamo"]
+    T_STOCKS[Stocks]
+    T_POSITIONS[Positions]
+    T_EVENTS[Events]
+    T_EARNINGS[Earnings]
+    T_ALERTS[SignalAlerts]
+    T_PULSE[MarketPulse]
+    T_PULSE_SNAP[MarketPulseSnapshot]
+    T_REGIME[MarketRegime]
+    T_ALIGN[MarketAlignment]
+    T_INDUSTRIES[Industries]
+  end
+
+  subgraph Crons["sst.aws.Cron"]
+    C_PRICES["PullPrices<br/>rate(1 min)"]
+    C_MACD["PullMacd<br/>rate(15 min)"]
+    C_ALERTS["EvaluateAlerts<br/>rate(30 min)"]
+    C_PULSE["PullPulse<br/>rate(5 / 15 min)"]
+    C_ALIGN["AlignMarketState<br/>rate(15 min)"]
+    C_HIST["RefreshStockHistoricals<br/>rate(1 day)"]
+    C_RETURNS["RefreshStockReturns<br/>rate(5 min)"]
+    C_ENRICH["EnrichStockFundamentals<br/>rate(2 h)"]
+  end
+
+  subgraph Functions["sst.aws.Function"]
+    F_PROCESS[ProcessStock]
+  end
+
+  subgraph Api["sst.aws.ApiGatewayV2: Api"]
+    R_HEALTH["GET /"]
+    R_EVENTS["GET /events"]
+    R_DOCS["GET /docs · /openapi.json"]
+    R_STOCKS["/stocks · /stocks/batch"]
+    R_EARNINGS["GET /earnings/{symbol}"]
+    R_ALERTS["/alerts"]
+    R_PULSE["/pulse · /pulse/tile · /pulse/sectors · /pulse/refresh"]
+    R_REGIME["/regime"]
+    R_ALIGNMENT["/alignment"]
+    R_POSITIONS["/positions"]
+    R_INDUSTRIES["/industries · /industries/performance · /industries/{industry}/performance"]
+  end
+
+  FMP[("FMP API")]
+  Client((Client))
+
+  Client --> Api
+
+  R_STOCKS --> T_STOCKS
+  R_STOCKS --> T_EVENTS
+  R_STOCKS --> F_PROCESS
+  R_STOCKS --> FMP
+  R_EARNINGS --> T_EARNINGS
+  R_EVENTS --> T_EVENTS
+  R_ALERTS --> T_ALERTS
+  R_ALERTS --> T_EVENTS
+  R_PULSE --> T_PULSE
+  R_PULSE --> T_PULSE_SNAP
+  R_REGIME --> T_REGIME
+  R_REGIME --> T_PULSE
+  R_REGIME --> T_EVENTS
+  R_ALIGNMENT --> T_ALIGN
+  R_ALIGNMENT --> T_REGIME
+  R_ALIGNMENT --> T_PULSE
+  R_POSITIONS --> T_POSITIONS
+  R_INDUSTRIES --> T_INDUSTRIES
+  R_INDUSTRIES --> T_STOCKS
+  R_INDUSTRIES --> FMP
+
+  Api -. uses .-> SEC_BEARER
+  Api -. uses .-> SEC_REFRESH
+  R_INDUSTRIES -. uses .-> SEC_FMP
+
+  F_PROCESS --> T_STOCKS
+  F_PROCESS --> T_EARNINGS
+  F_PROCESS --> T_EVENTS
+  F_PROCESS --> FMP
+  F_PROCESS -. uses .-> SEC_FMP
+
+  C_PRICES --> T_STOCKS
+  C_PRICES --> FMP
+  C_MACD --> T_STOCKS
+  C_MACD --> FMP
+  C_ALERTS --> T_STOCKS
+  C_ALERTS --> T_ALERTS
+  C_ALERTS --> T_EVENTS
+  C_PULSE --> T_PULSE
+  C_PULSE --> T_PULSE_SNAP
+  C_PULSE --> T_EVENTS
+  C_PULSE --> FMP
+  C_ALIGN --> T_PULSE
+  C_ALIGN --> T_REGIME
+  C_ALIGN --> T_ALIGN
+  C_ALIGN --> T_EVENTS
+  C_HIST --> T_STOCKS
+  C_HIST --> FMP
+  C_RETURNS --> T_STOCKS
+  C_RETURNS --> FMP
+  C_ENRICH --> T_STOCKS
+  C_ENRICH --> FMP
+
+  C_PRICES -. uses .-> SEC_FMP
+  C_MACD -. uses .-> SEC_FMP
+  C_PULSE -. uses .-> SEC_FMP
+  C_HIST -. uses .-> SEC_FMP
+  C_RETURNS -. uses .-> SEC_FMP
+  C_ENRICH -. uses .-> SEC_FMP
+
+  classDef secret fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+  classDef table fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a
+  classDef cron fill:#f0fdf4,stroke:#22c55e,color:#166534
+  classDef fn fill:#fdf4ff,stroke:#a855f7,color:#581c87
+  classDef route fill:#fefce8,stroke:#eab308,color:#713f12
+  classDef ext fill:#fef2f2,stroke:#ef4444,color:#7f1d1d
+
+  class SEC_BEARER,SEC_FMP,SEC_REFRESH secret
+  class T_STOCKS,T_POSITIONS,T_EVENTS,T_EARNINGS,T_ALERTS,T_PULSE,T_PULSE_SNAP,T_REGIME,T_ALIGN,T_INDUSTRIES table
+  class C_PRICES,C_MACD,C_ALERTS,C_PULSE,C_ALIGN,C_HIST,C_RETURNS,C_ENRICH cron
+  class F_PROCESS fn
+  class R_HEALTH,R_EVENTS,R_DOCS,R_STOCKS,R_EARNINGS,R_ALERTS,R_PULSE,R_REGIME,R_ALIGNMENT,R_POSITIONS,R_INDUSTRIES route
+  class FMP ext
