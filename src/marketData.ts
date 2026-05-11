@@ -52,7 +52,7 @@ type RawQuote = {
   symbol?: string;
   price?: number;
   change?: number;
-  changesPercentage?: number;
+  changePercentage?: number;
 };
 
 const SECTOR_ETFS: Record<string, string> = {
@@ -106,7 +106,7 @@ export async function fetchMarketData(apiKey: string): Promise<MarketDataSnapsho
       symbol,
       name,
       price: round2(quote.price),
-      changePercent: round2(quote.changesPercentage),
+      changePercent: round2(quote.changePercentage),
       momentum: "neutral"
     });
   }
@@ -128,7 +128,7 @@ export async function fetchMarketData(apiKey: string): Promise<MarketDataSnapsho
     fx.push({
       symbol,
       price: round4(quote.price),
-      changePercent: round2(quote.changesPercentage)
+      changePercent: round2(quote.changePercentage)
     });
   }
 
@@ -150,7 +150,7 @@ export async function fetchMarketData(apiKey: string): Promise<MarketDataSnapsho
 
 async function fetchQuotes(apiKey: string, symbols: string[]): Promise<RawQuote[]> {
   const joined = symbols.map((symbol) => encodeURIComponent(symbol)).join(",");
-  const url = `https://financialmodelingprep.com/api/v3/quote/${joined}?apikey=${encodeURIComponent(apiKey)}`;
+  const url = `https://financialmodelingprep.com/stable/batch-quote?symbols=${joined}&apikey=${encodeURIComponent(apiKey)}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -169,7 +169,7 @@ function toVix(quote: RawQuote | undefined): VixEntry | null {
   if (!quote || quote.price === undefined) return null;
   return {
     value: round2(quote.price),
-    changePercent: round2(quote.changesPercentage),
+    changePercent: round2(quote.changePercentage),
     status: vixBand(quote.price)
   };
 }
@@ -178,7 +178,7 @@ function toCommodity(quote: RawQuote | undefined): CommodityEntry | null {
   if (!quote || quote.price === undefined) return null;
   return {
     price: round2(quote.price),
-    changePercent: round2(quote.changesPercentage)
+    changePercent: round2(quote.changePercentage)
   };
 }
 
@@ -186,7 +186,7 @@ function toIndex(quote: RawQuote | undefined): IndexEntry | null {
   if (!quote || quote.price === undefined) return null;
   return {
     value: round2(quote.price),
-    changePercent: round2(quote.changesPercentage)
+    changePercent: round2(quote.changePercentage)
   };
 }
 

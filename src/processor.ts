@@ -157,7 +157,8 @@ async function fetchIncomeStatement(
   period: "annual" | "quarter",
   apiKey: string
 ): Promise<FmpIncomeStatement[]> {
-  const url = new URL(`https://financialmodelingprep.com/api/v3/income-statement/${encodeURIComponent(symbol)}`);
+  const url = new URL("https://financialmodelingprep.com/stable/income-statement");
+  url.searchParams.set("symbol", symbol);
   url.searchParams.set("period", period);
   url.searchParams.set("limit", "400");
   url.searchParams.set("apikey", apiKey);
@@ -175,7 +176,8 @@ async function fetchCashFlowStatement(
   period: "annual" | "quarter",
   apiKey: string
 ): Promise<FmpCashFlowStatement[]> {
-  const url = new URL(`https://financialmodelingprep.com/api/v3/cash-flow-statement/${encodeURIComponent(symbol)}`);
+  const url = new URL("https://financialmodelingprep.com/stable/cash-flow-statement");
+  url.searchParams.set("symbol", symbol);
   url.searchParams.set("period", period);
   url.searchParams.set("limit", "400");
   url.searchParams.set("apikey", apiKey);

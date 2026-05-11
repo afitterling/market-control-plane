@@ -104,7 +104,7 @@ export async function pullPulse(): Promise<PulseRunResult> {
     if (!article.publishedDate) {
       return true;
     }
-    const ts = Date.parse(article.publishedDate);
+    const ts = parseFmpDate(article.publishedDate);
     return Number.isFinite(ts) && ts >= windowStart.getTime();
   });
 
@@ -509,10 +509,17 @@ export async function get(event: APIGatewayProxyEventV2): Promise<APIGatewayProx
   return json({ region: response.Item });
 }
 
+function parseFmpDate(value: string | undefined): number {
+  if (!value) return NaN;
+  const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  return Date.parse(normalized);
+}
+
 async function fetchRecentNews(apiKey: string): Promise<NewsArticle[]> {
+  const key = encodeURIComponent(apiKey);
   const endpoints = [
-    `https://financialmodelingprep.com/api/v3/stock_news?limit=100&apikey=${encodeURIComponent(apiKey)}`,
-    `https://financialmodelingprep.com/api/v4/general_news?page=0&size=100&apikey=${encodeURIComponent(apiKey)}`
+    `https://financialmodelingprep.com/stable/news/general-latest?page=0&limit=100&apikey=${key}`,
+    `https://financialmodelingprep.com/stable/news/stock-latest?page=0&limit=100&apikey=${key}`
   ];
 
   const results = await Promise.all(
@@ -588,7 +595,7 @@ function buildRow(
       themes
     }))
     .filter((link) => link.title && link.url)
-    .sort((first, second) => Date.parse(second.publishedAt ?? "") - Date.parse(first.publishedAt ?? ""))
+    .sort((first, second) => parseFmpDate(second.publishedAt) - parseFmpDate(first.publishedAt))
     .slice(0, MAX_LINKS_PER_REGION);
 
   const lastNewsAt = links.find((link) => link.publishedAt)?.publishedAt ?? updatedAt;

@@ -120,21 +120,25 @@ async function computeAllTimeframes(symbol: string, apiKey: string): Promise<Rec
 
 async function fetchCandles(symbol: string, interval: FmpInterval, apiKey: string): Promise<Candle[]> {
   if (interval === "daily") {
-    const url = new URL(`https://financialmodelingprep.com/api/v3/historical-price-full/${encodeURIComponent(symbol)}`);
-    url.searchParams.set("serietype", "line");
+    const url = new URL("https://financialmodelingprep.com/stable/historical-price-eod/full");
+    url.searchParams.set("symbol", symbol);
     url.searchParams.set("apikey", apiKey);
     const response = await fetch(url);
     if (!response.ok) {
       console.error("FMP daily request failed", { symbol, status: response.status });
       return [];
     }
-    const data = (await response.json()) as { historical?: { date: string; close: number }[] };
-    return (data.historical ?? [])
+    const data = (await response.json()) as unknown;
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return (data as { date: string; close: number }[])
       .map((bar) => ({ date: bar.date, close: bar.close }))
       .reverse();
   }
 
-  const url = new URL(`https://financialmodelingprep.com/api/v3/historical-chart/${interval}/${encodeURIComponent(symbol)}`);
+  const url = new URL(`https://financialmodelingprep.com/stable/historical-chart/${interval}`);
+  url.searchParams.set("symbol", symbol);
   url.searchParams.set("apikey", apiKey);
   const response = await fetch(url);
   if (!response.ok) {

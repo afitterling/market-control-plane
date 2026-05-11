@@ -11,7 +11,7 @@ type FmpQuote = {
   symbol?: string;
   price?: number;
   change?: number;
-  changesPercentage?: number;
+  changePercentage?: number;
   dayLow?: number;
   dayHigh?: number;
   open?: number;
@@ -86,7 +86,8 @@ async function listStockSymbols(): Promise<string[]> {
 }
 
 async function fetchQuotes(symbols: string[], apiKey: string): Promise<FmpQuote[]> {
-  const url = new URL(`https://financialmodelingprep.com/api/v3/quote/${symbols.join(",")}`);
+  const url = new URL("https://financialmodelingprep.com/stable/batch-quote");
+  url.searchParams.set("symbols", symbols.join(","));
   url.searchParams.set("apikey", apiKey);
 
   const response = await fetch(url);
@@ -114,7 +115,7 @@ async function writeQuote(quote: FmpQuote): Promise<void> {
         ExpressionAttributeValues: {
           ":price": numericOrNull(quote.price),
           ":change": numericOrNull(quote.change),
-          ":pct": numericOrNull(quote.changesPercentage),
+          ":pct": numericOrNull(quote.changePercentage),
           ":low": numericOrNull(quote.dayLow),
           ":high": numericOrNull(quote.dayHigh),
           ":open": numericOrNull(quote.open),
