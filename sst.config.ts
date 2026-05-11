@@ -210,12 +210,8 @@ export default $config({
 
     return {
       api: api.url,
-      ...($dev
-        ? {
-            docs: $interpolate`${apiBase}/docs`,
-            openapi: $interpolate`${apiBase}/openapi.json`
-          }
-        : {}),
+      docs: $interpolate`${apiBase}/docs`,
+      openapi: $interpolate`${apiBase}/openapi.json`,
       stocksTable: stocks.name,
       positionsTable: positions.name,
       eventsTable: events.name,
