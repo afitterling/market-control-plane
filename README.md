@@ -33,7 +33,8 @@ Source: [`doc/diagrams/system-components.mmd`](./doc/diagrams/system-components.
 
 Three Kinesis Data Streams (`Ticks`, `Signals`, `PulseEvents`) carry high-volume events; a WebSocket API (`RealtimeApi`) fans them out to subscribed clients (browser, Remix server, `wscat`, etc.). Subscriptions support per-symbol / per-region / per-kind filters.
 
-Full contract, subscription protocol, and Remix code samples (native `WebSocket` and server-forwarded SSE): [`doc/realtime.md`](./doc/realtime.md).
+- Stream catalog, record schemas, producer/consumer paths, AWS CLI examples: [`doc/kinesis.md`](./doc/kinesis.md).
+- WebSocket subscription protocol and Remix code samples (native `WebSocket` and server-forwarded SSE): [`doc/realtime.md`](./doc/realtime.md).
 
 ## 1. Market Regime Detection Capabilities
 
