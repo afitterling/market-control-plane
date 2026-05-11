@@ -173,8 +173,10 @@ export default $config({
     api.route("GET /", "src/api.health");
     api.route("GET /events", "src/events.list");
 
-    api.route("GET /docs", "src/docs.ui");
-    api.route("GET /openapi.json", "src/docs.spec");
+    if ($dev) {
+      api.route("GET /docs", "src/docs.ui");
+      api.route("GET /openapi.json", "src/docs.spec");
+    }
 
     api.route("GET /stocks", "src/stocks.list");
     api.route("GET /stocks/{symbol}", "src/stocks.get");
@@ -204,8 +206,16 @@ export default $config({
     api.route("GET /positions/{accountId}/{symbol}", "src/positions.get");
     api.route("POST /positions", "src/positions.create");
 
+    const apiBase = api.url.apply((value: string) => value.replace(/\/$/, ""));
+
     return {
       api: api.url,
+      ...($dev
+        ? {
+            docs: $interpolate`${apiBase}/docs`,
+            openapi: $interpolate`${apiBase}/openapi.json`
+          }
+        : {}),
       stocksTable: stocks.name,
       positionsTable: positions.name,
       eventsTable: events.name,
