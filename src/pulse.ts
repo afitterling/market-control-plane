@@ -21,6 +21,7 @@ const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
 const SNAPSHOT_RETENTION = 100;
 const SNAPSHOT_SCOPE = "global";
 const MARKET_DATA_TTL_MS = 60 * 60 * 1000;
+const NEWS_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 export type PulseStatus = "calm" | "watch" | "elevated" | "critical";
 
@@ -96,10 +97,12 @@ export async function pullPulse(): Promise<PulseRunResult> {
   }
 
   const windowEnd = new Date();
-  const windowStart = new Date(windowEnd.getTime() - 20 * 60 * 1000);
+  const windowStart = new Date(windowEnd.getTime() - NEWS_WINDOW_MS);
 
   const articles = await fetchRecentNews(apiKey);
-  console.log("pulse.news_fetched", { total: articles.length });
+  const newest = articles[0]?.publishedDate;
+  const oldest = articles.at(-1)?.publishedDate;
+  console.log("pulse.news_fetched", { total: articles.length, newest, oldest });
   const recent = articles.filter((article) => {
     if (!article.publishedDate) {
       return true;
@@ -255,13 +258,17 @@ async function getMarketDataWithCache(
   previous: PulseSnapshot | undefined
 ): Promise<MarketDataSnapshot> {
   const cached = previous?.marketData;
-  if (cached?.fetchedAt) {
+  if (cached?.fetchedAt && isUsableMarketData(cached)) {
     const ageMs = Date.now() - Date.parse(cached.fetchedAt);
     if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < MARKET_DATA_TTL_MS) {
       return cached;
     }
   }
   return fetchMarketDataSafely(apiKey);
+}
+
+function isUsableMarketData(data: MarketDataSnapshot): boolean {
+  return data.vix !== null || data.sectors.length > 0 || data.fx.length > 0;
 }
 
 function computeOverall(regions: PulseRow[]): PulseOverall {

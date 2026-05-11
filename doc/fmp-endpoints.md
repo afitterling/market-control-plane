@@ -39,12 +39,18 @@ which rewrites the value to `YYYY-MM-DDTHH:mm:ssZ` before parsing.
 `POST /pulse/refresh` and the `PullPulse` cron run the full pipeline:
 
 1. News fetch (always live — `general-latest` + `stock-latest`)
-2. Region extraction and per-region scoring
-3. Market data (VIX, SPDR sector ETFs, FX, oil, gold via
+2. Articles older than the 4-hour news window are dropped before
+   region extraction. The 4 h window matches the `MarketPulse` stale
+   threshold, so a region cannot stay "active" on news the system
+   considers stale.
+3. Region extraction and per-region scoring
+4. Market data (VIX, SPDR sector ETFs, FX, oil, gold via
    `/stable/batch-quote`) — **reused from the latest
    `MarketPulseSnapshot` if `marketData.fetchedAt` is less than one
-   hour old**, otherwise fetched fresh
-4. Snapshot persisted to `MarketPulseSnapshot` (retention: latest 100)
+   hour old and the cached payload is non-empty (`vix` not null, or
+   any sector/FX data present)**, otherwise fetched fresh. The
+   non-empty check prevents a failed fetch from poisoning the cache.
+5. Snapshot persisted to `MarketPulseSnapshot` (retention: latest 100)
 
 All `GET /pulse*` routes read exclusively from DynamoDB — they never
 call FMP.
