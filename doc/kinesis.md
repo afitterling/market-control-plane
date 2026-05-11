@@ -194,6 +194,15 @@ For sustained reads use the [Kinesis Client Library (KCL)](https://docs.aws.amaz
 - **Record size** cap: 1 MB per record, 5 MB or 500 records per `PutRecords`. The schemas above are well under both.
 - **Monitoring**: CloudWatch metrics `IncomingRecords`, `IncomingBytes`, `WriteProvisionedThroughputExceeded`, `IteratorAgeMilliseconds` per stream. The last one is the key consumer-health signal — alarm if it grows beyond a minute.
 
+## Machine-readable spec
+
+The streams and WebSocket protocol are described in an **AsyncAPI 3.0** spec served at:
+
+- `GET /asyncapi.json` — raw spec
+- `GET /asyncapi` — rendered HTML (AsyncAPI React component)
+
+Both routes are gated by `$dev` in `sst.config.ts` alongside the existing Swagger UI for OpenAPI. Source: [`../src/specs/asyncapi.ts`](../src/specs/asyncapi.ts).
+
 ## Cross-references
 
 - WebSocket fan-out and subscription protocol: [`realtime.md`](./realtime.md)

@@ -246,6 +246,8 @@ export default $config({
     if ($dev) {
       api.route("GET /docs", "src/docs.ui");
       api.route("GET /openapi.json", "src/docs.spec");
+      api.route("GET /asyncapi", "src/asyncDocs.ui");
+      api.route("GET /asyncapi.json", "src/asyncDocs.spec");
     }
 
     api.route("GET /stocks", "src/stocks.list");
@@ -330,6 +332,8 @@ export default $config({
       realtime: realtime.url,
       docs: $interpolate`${apiBase}/docs`,
       openapi: $interpolate`${apiBase}/openapi.json`,
+      asyncDocs: $interpolate`${apiBase}/asyncapi`,
+      asyncSpec: $interpolate`${apiBase}/asyncapi.json`,
       stocksTable: stocks.name,
       positionsTable: positions.name,
       eventsTable: events.name,

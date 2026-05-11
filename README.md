@@ -35,6 +35,7 @@ Three Kinesis Data Streams (`Ticks`, `Signals`, `PulseEvents`) carry high-volume
 
 - Stream catalog, record schemas, producer/consumer paths, AWS CLI examples: [`doc/kinesis.md`](./doc/kinesis.md).
 - WebSocket subscription protocol and Remix code samples (native `WebSocket` and server-forwarded SSE): [`doc/realtime.md`](./doc/realtime.md).
+- Machine-readable AsyncAPI 3.0 spec for the streams + WebSocket protocol: `GET /asyncapi.json` (raw) and `GET /asyncapi` (rendered) — gated by `$dev`, parallel to `GET /docs` for the REST OpenAPI.
 
 ## 1. Market Regime Detection Capabilities
 
