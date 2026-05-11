@@ -73,6 +73,8 @@ export type MarketAlignmentRow = {
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export async function alignMarketState(): Promise<MarketAlignmentRow> {
+  const startedAt = Date.now();
+  console.log("alignment.start", { at: new Date(startedAt).toISOString() });
   const regimes = await Promise.all(
     ALL_SCALES.map(async (scale) => {
       try {
@@ -108,6 +110,17 @@ export async function alignMarketState(): Promise<MarketAlignmentRow> {
       summary: row.composite.summary
     });
   }
+
+  console.log("alignment.done", {
+    durationMs: Date.now() - startedAt,
+    riskLevel: row.composite.riskLevel,
+    bias: row.composite.bias,
+    biasScore: row.composite.biasScore,
+    pulseRiskScore: row.composite.pulseRiskScore,
+    hotRegions: row.composite.hotRegions,
+    regimesComputed: row.regimes.length,
+    pulseRegions: row.pulse.length
+  });
 
   return row;
 }

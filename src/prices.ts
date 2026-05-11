@@ -24,6 +24,8 @@ type FmpQuote = {
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export async function pullPrices(): Promise<{ passes: { updated: number; symbols: number }[] }> {
+  const startedAt = Date.now();
+  console.log("prices.start", { at: new Date(startedAt).toISOString() });
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
     throw new Error("FMP_API_KEY is not configured.");
@@ -36,7 +38,13 @@ export async function pullPrices(): Promise<{ passes: { updated: number; symbols
     }
     const result = await runPass(apiKey);
     passes.push(result);
+    console.log("prices.pass", { pass, ...result });
   }
+  console.log("prices.done", {
+    durationMs: Date.now() - startedAt,
+    totalUpdated: passes.reduce((sum, p) => sum + p.updated, 0),
+    symbols: passes[0]?.symbols ?? 0
+  });
   return { passes };
 }
 

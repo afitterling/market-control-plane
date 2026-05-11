@@ -10,6 +10,8 @@ export async function evaluateAlerts(): Promise<{
   evaluated: number;
   raised: number;
 }> {
+  const startedAt = Date.now();
+  console.log("alerts.start", { at: new Date(startedAt).toISOString() });
   const session = currentMarketSession(new Date());
 
   if (session === "closed") {
@@ -17,6 +19,13 @@ export async function evaluateAlerts(): Promise<{
       action: SIGN_ALERT_TICK_SKIPPED,
       reason: "market_closed",
       at: nowIso()
+    });
+    console.log("alerts.done", {
+      durationMs: Date.now() - startedAt,
+      session,
+      evaluated: 0,
+      raised: 0,
+      reason: "market_closed"
     });
     return { session, evaluated: 0, raised: 0 };
   }
@@ -41,6 +50,12 @@ export async function evaluateAlerts(): Promise<{
     }
   }
 
+  console.log("alerts.done", {
+    durationMs: Date.now() - startedAt,
+    session,
+    evaluated: candidates.length,
+    raised
+  });
   return { session, evaluated: candidates.length, raised };
 }
 

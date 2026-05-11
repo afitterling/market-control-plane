@@ -64,6 +64,8 @@ export async function processMacd(input: { symbol?: string }): Promise<{ symbol:
 }
 
 export async function processAllMacd(): Promise<{ scanned: number; updated: number }> {
+  const startedAt = Date.now();
+  console.log("macd.start", { at: new Date(startedAt).toISOString() });
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
     throw new Error("FMP_API_KEY is not configured.");
@@ -71,6 +73,7 @@ export async function processAllMacd(): Promise<{ scanned: number; updated: numb
 
   const symbols = await listStockSymbols();
   let updated = 0;
+  let failed = 0;
 
   for (let index = 0; index < symbols.length; index += SYMBOL_CONCURRENCY) {
     const batch = symbols.slice(index, index + SYMBOL_CONCURRENCY);
@@ -84,11 +87,18 @@ export async function processAllMacd(): Promise<{ scanned: number; updated: numb
       if (result.status === "fulfilled") {
         updated += 1;
       } else {
+        failed += 1;
         console.error("MACD update failed", { cause: result.reason });
       }
     }
   }
 
+  console.log("macd.done", {
+    durationMs: Date.now() - startedAt,
+    scanned: symbols.length,
+    updated,
+    failed
+  });
   return { scanned: symbols.length, updated };
 }
 

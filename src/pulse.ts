@@ -88,6 +88,8 @@ export type PulseRunResult = {
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export async function pullPulse(): Promise<PulseRunResult> {
+  const startedAt = Date.now();
+  console.log("pulse.start", { at: new Date(startedAt).toISOString() });
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
     throw new Error("FMP_API_KEY is not configured.");
@@ -97,6 +99,7 @@ export async function pullPulse(): Promise<PulseRunResult> {
   const windowStart = new Date(windowEnd.getTime() - 20 * 60 * 1000);
 
   const articles = await fetchRecentNews(apiKey);
+  console.log("pulse.news_fetched", { total: articles.length });
   const recent = articles.filter((article) => {
     if (!article.publishedDate) {
       return true;
@@ -200,7 +203,7 @@ export async function pullPulse(): Promise<PulseRunResult> {
 
   await persistSnapshot(snapshot);
 
-  return {
+  const result: PulseRunResult = {
     regionsTouched,
     regionsMarkedStale,
     articles: recent.length,
@@ -208,6 +211,25 @@ export async function pullPulse(): Promise<PulseRunResult> {
     windowEnd: windowEnd.toISOString(),
     snapshot
   };
+
+  console.log("pulse.done", {
+    durationMs: Date.now() - startedAt,
+    regionsTouched,
+    regionsMarkedStale,
+    articles: recent.length,
+    overall: overall.status,
+    score: overall.score,
+    hotRegions: overall.hotRegions,
+    vix: marketData.vix?.value ?? null,
+    marketDataAge: cached(marketData, previousSnapshot)
+  });
+
+  return result;
+}
+
+function cached(current: MarketDataSnapshot, previous: PulseSnapshot | undefined): string {
+  if (!previous) return "fresh";
+  return current.fetchedAt === previous.marketData.fetchedAt ? "cached" : "fresh";
 }
 
 async function fetchMarketDataSafely(apiKey: string): Promise<MarketDataSnapshot> {
