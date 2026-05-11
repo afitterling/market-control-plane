@@ -1,0 +1,5 @@
+#!/bin/sh
+# Run sst dev (Live Lambda) on the "local" SST stage.
+set -eu
+cd "$(dirname "$0")/../../.."
+exec npx sst dev --stage local "$@"

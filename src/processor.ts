@@ -82,10 +82,10 @@ export async function processStock(input: { symbol?: string }): Promise<{
     throw new Error("processStock requires a symbol.");
   }
 
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = Resource.FmpApiKey.value;
   if (!apiKey) {
-    await markFailed(symbol, "FMP_API_KEY is not configured.");
-    throw new Error("FMP_API_KEY is not configured.");
+    await markFailed(symbol, "FmpApiKey secret is not configured.");
+    throw new Error("FmpApiKey secret is not configured.");
   }
 
   try {

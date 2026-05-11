@@ -9,6 +9,10 @@ export default $config({
     };
   },
   async run() {
+    const apiBearerToken = new sst.Secret("ApiBearerToken");
+    const fmpApiKey = new sst.Secret("FmpApiKey");
+    const pulseRefreshToken = new sst.Secret("PulseRefreshToken");
+
     const stocks = new sst.aws.Dynamo("Stocks", {
       fields: {
         symbol: "string"
@@ -104,22 +108,16 @@ export default $config({
 
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
-      link: [stocks, earnings, events],
-      timeout: "5 minutes",
-      environment: {
-        FMP_API_KEY: process.env.FMP_API_KEY ?? ""
-      }
+      link: [stocks, earnings, events, fmpApiKey],
+      timeout: "5 minutes"
     });
 
     new sst.aws.Cron("PullPrices", {
       schedule: "rate(1 minute)",
       function: {
         handler: "src/prices.pullPrices",
-        link: [stocks],
-        timeout: "90 seconds",
-        environment: {
-          FMP_API_KEY: process.env.FMP_API_KEY ?? ""
-        }
+        link: [stocks, fmpApiKey],
+        timeout: "90 seconds"
       }
     });
 
@@ -127,12 +125,9 @@ export default $config({
       schedule: "rate(15 minutes)",
       function: {
         handler: "src/macd.processAllMacd",
-        link: [stocks],
+        link: [stocks, fmpApiKey],
         timeout: "10 minutes",
-        memory: "512 MB",
-        environment: {
-          FMP_API_KEY: process.env.FMP_API_KEY ?? ""
-        }
+        memory: "512 MB"
       }
     });
 
@@ -149,12 +144,9 @@ export default $config({
       schedule: $dev ? "rate(5 minutes)" : "rate(15 minutes)",
       function: {
         handler: "src/pulse.pullPulse",
-        link: [marketPulse, marketPulseSnapshot, events],
+        link: [marketPulse, marketPulseSnapshot, events, fmpApiKey],
         timeout: "2 minutes",
-        memory: "512 MB",
-        environment: {
-          FMP_API_KEY: process.env.FMP_API_KEY ?? ""
-        }
+        memory: "512 MB"
       }
     });
 
@@ -178,17 +170,15 @@ export default $config({
         marketPulseSnapshot,
         marketRegime,
         marketAlignment,
-        processStock
+        processStock,
+        apiBearerToken,
+        fmpApiKey,
+        pulseRefreshToken
       ],
       transform: {
         route: {
           handler: {
-            runtime: "nodejs22.x",
-            environment: {
-              API_BEARER_TOKEN: process.env.API_BEARER_TOKEN ?? "",
-              FMP_API_KEY: process.env.FMP_API_KEY ?? "",
-              PULSE_REFRESH_TOKEN: process.env.PULSE_REFRESH_TOKEN ?? ""
-            }
+            runtime: "nodejs22.x"
           }
         }
       }

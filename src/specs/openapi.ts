@@ -225,10 +225,27 @@ export const openApiSpec = {
         tags: ["Pulse"],
         summary: "Force a pulse run (news + regions + market data + snapshot)",
         description:
-          "Requires the PULSE_REFRESH_TOKEN via the X-Refresh-Token header; the regular Bearer token does not authorize this endpoint.",
-        security: [{ refreshToken: [] }],
+          "Requires the regular Bearer token AND the PulseRefreshToken value in the JSON body.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["refreshToken"],
+                properties: {
+                  refreshToken: {
+                    type: "string",
+                    description: "Value of the PulseRefreshToken SST secret"
+                  }
+                }
+              }
+            }
+          }
+        },
         responses: {
           "201": { description: "Run result with snapshot" },
+          "400": { $ref: "#/components/responses/BadRequest" },
           "401": { $ref: "#/components/responses/Unauthorized" },
           "500": { description: "Pulse refresh failed" }
         }
@@ -395,13 +412,7 @@ export const openApiSpec = {
       bearerAuth: {
         type: "http",
         scheme: "bearer",
-        description: "API_BEARER_TOKEN configured on the deployment"
-      },
-      refreshToken: {
-        type: "apiKey",
-        in: "header",
-        name: "X-Refresh-Token",
-        description: "PULSE_REFRESH_TOKEN configured on the deployment; only authorizes /pulse/refresh"
+        description: "Value of the ApiBearerToken SST secret"
       }
     },
     responses: {

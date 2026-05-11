@@ -2,6 +2,18 @@ import "sst";
 
 declare module "sst" {
   export interface Resource {
+    ApiBearerToken: {
+      value: string;
+      type: "sst.sst.Secret";
+    };
+    FmpApiKey: {
+      value: string;
+      type: "sst.sst.Secret";
+    };
+    PulseRefreshToken: {
+      value: string;
+      type: "sst.sst.Secret";
+    };
     Stocks: {
       name: string;
       type: "sst.aws.Dynamo";

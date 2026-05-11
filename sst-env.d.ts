@@ -10,6 +10,10 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
+    "ApiBearerToken": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "Earnings": {
       "name": string
       "type": "sst.aws.Dynamo"
@@ -17,6 +21,10 @@ declare module "sst" {
     "Events": {
       "name": string
       "type": "sst.aws.Dynamo"
+    }
+    "FmpApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
     }
     "MarketAlignment": {
       "name": string
@@ -41,6 +49,10 @@ declare module "sst" {
     "ProcessStock": {
       "name": string
       "type": "sst.aws.Function"
+    }
+    "PulseRefreshToken": {
+      "type": "sst.sst.Secret"
+      "value": string
     }
     "SignalAlerts": {
       "name": string

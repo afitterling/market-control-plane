@@ -26,9 +26,9 @@ const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 export async function pullPrices(): Promise<{ passes: { updated: number; symbols: number }[] }> {
   const startedAt = Date.now();
   console.log("prices.start", { at: new Date(startedAt).toISOString() });
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = Resource.FmpApiKey.value;
   if (!apiKey) {
-    throw new Error("FMP_API_KEY is not configured.");
+    throw new Error("FmpApiKey secret is not configured.");
   }
 
   const passes: { updated: number; symbols: number }[] = [];

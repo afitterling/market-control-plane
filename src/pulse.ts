@@ -10,7 +10,7 @@ import {
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { publishEvent } from "./events";
-import { error, json, nowIso, requireBearerToken, requireSecretHeader } from "./http";
+import { error, json, nowIso, parseJsonBody, requireBearerToken, tokenMatches } from "./http";
 import { fetchMarketData, type MarketDataSnapshot } from "./marketData";
 
 const PULSE_REGION_UPDATED = "PULSE_REGION_UPDATED";
@@ -21,7 +21,7 @@ const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
 const SNAPSHOT_RETENTION = 100;
 const SNAPSHOT_SCOPE = "global";
 const MARKET_DATA_TTL_MS = 60 * 60 * 1000;
-const NEWS_WINDOW_MS = 4 * 60 * 60 * 1000;
+const NEWS_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type PulseStatus = "calm" | "watch" | "elevated" | "critical";
 
@@ -91,9 +91,9 @@ const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 export async function pullPulse(): Promise<PulseRunResult> {
   const startedAt = Date.now();
   console.log("pulse.start", { at: new Date(startedAt).toISOString() });
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = Resource.FmpApiKey.value;
   if (!apiKey) {
-    throw new Error("FMP_API_KEY is not configured.");
+    throw new Error("FmpApiKey secret is not configured.");
   }
 
   const windowEnd = new Date();
@@ -405,10 +405,26 @@ async function fetchPreviousSnapshot(excludingKey: string): Promise<PulseSnapsho
 }
 
 export async function refresh(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
-  const unauthorized = requireSecretHeader(event, "x-refresh-token", "PULSE_REFRESH_TOKEN");
+  const unauthorized = requireBearerToken(event);
   if (unauthorized) {
     return unauthorized;
   }
+
+  let body: unknown;
+  try {
+    body = parseJsonBody(event);
+  } catch {
+    return error("Request body must be valid JSON.");
+  }
+
+  const provided = typeof body === "object" && body !== null
+    ? String((body as Record<string, unknown>).refreshToken ?? "")
+    : "";
+
+  if (!tokenMatches(provided, Resource.PulseRefreshToken.value)) {
+    return error("Invalid refresh token.", 401);
+  }
+
   try {
     const result = await pullPulse();
     return json({ run: result }, 201);

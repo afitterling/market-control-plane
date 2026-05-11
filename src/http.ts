@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { Resource } from "sst";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -24,7 +25,7 @@ export function error(message: string, statusCode = 400, details?: unknown): API
 }
 
 export function requireBearerToken(event: APIGatewayProxyEventV2): APIGatewayProxyResultV2 | undefined {
-  const expectedToken = process.env.API_BEARER_TOKEN;
+  const expectedToken = Resource.ApiBearerToken.value;
   const authorization = event.headers.authorization ?? event.headers.Authorization ?? "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
 
@@ -40,23 +41,9 @@ export function requireBearerToken(event: APIGatewayProxyEventV2): APIGatewayPro
   return undefined;
 }
 
-export function requireSecretHeader(
-  event: APIGatewayProxyEventV2,
-  headerName: string,
-  envVar: string
-): APIGatewayProxyResultV2 | undefined {
-  const expected = process.env[envVar];
-  const headers = event.headers ?? {};
-  const lower = headerName.toLowerCase();
-  const supplied = String(
-    headers[lower] ?? headers[headerName] ?? headers[headerName.toUpperCase()] ?? ""
-  ).trim();
-
-  if (!expected || !isSameToken(supplied, expected)) {
-    return json({ error: "Unauthorized." }, 401);
-  }
-
-  return undefined;
+export function tokenMatches(actual: string, expected: string): boolean {
+  if (!expected) return false;
+  return isSameToken(actual, expected);
 }
 
 export function parseJsonBody(event: APIGatewayProxyEventV2): unknown {

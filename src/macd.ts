@@ -53,9 +53,9 @@ export async function processMacd(input: { symbol?: string }): Promise<{ symbol:
     throw new Error("processMacd requires a symbol.");
   }
 
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = Resource.FmpApiKey.value;
   if (!apiKey) {
-    throw new Error("FMP_API_KEY is not configured.");
+    throw new Error("FmpApiKey secret is not configured.");
   }
 
   const readings = await computeAllTimeframes(symbol, apiKey);
@@ -66,9 +66,9 @@ export async function processMacd(input: { symbol?: string }): Promise<{ symbol:
 export async function processAllMacd(): Promise<{ scanned: number; updated: number }> {
   const startedAt = Date.now();
   console.log("macd.start", { at: new Date(startedAt).toISOString() });
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = Resource.FmpApiKey.value;
   if (!apiKey) {
-    throw new Error("FMP_API_KEY is not configured.");
+    throw new Error("FmpApiKey secret is not configured.");
   }
 
   const symbols = await listStockSymbols();

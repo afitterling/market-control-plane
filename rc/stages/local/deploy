@@ -1,0 +1,5 @@
+#!/bin/sh
+# Deploy the market-control-plane stack to the "local" SST stage.
+set -eu
+cd "$(dirname "$0")/../../.."
+exec npx sst deploy --stage local "$@"
