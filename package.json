@@ -7,10 +7,10 @@
   "author": "Alex Fitterling",
   "scripts": {
     "setup": "npx sst install",
-    "secrets:load": "npx sst secret load .env --stage local",
-    "dev": "npm run secrets:load && npx sst dev --stage local",
-    "deploy": "npm run secrets:load && npx sst deploy --stage local",
-    "remove": "npx sst remove --stage local",
+    "secrets:load": "npx sst secret load .env",
+    "dev": "npm run secrets:load && npx sst dev",
+    "deploy": "npm run secrets:load && npx sst deploy",
+    "remove": "npx sst remove",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
