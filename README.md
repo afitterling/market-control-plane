@@ -37,6 +37,29 @@ Three Kinesis Data Streams (`Ticks`, `Signals`, `PulseEvents`) carry high-volume
 - WebSocket subscription protocol and Remix code samples (native `WebSocket` and server-forwarded SSE): [`doc/realtime.md`](./doc/realtime.md).
 - Machine-readable AsyncAPI 3.0 spec for the streams + WebSocket protocol: `GET /asyncapi.json` (raw) and `GET /asyncapi` (rendered) — gated by `$dev`, parallel to `GET /docs` for the REST OpenAPI.
 
+### Stock onboarding and narrative
+
+Adding a stock kicks off the ProcessStock Lambda asynchronously (earnings + MACD seed). When processing finishes the system publishes both an event (`STCO_READY`) and a `signals` stream record (`kind: "alert"`, `status: "stock-ready"`), so any WebSocket subscriber on the `signals` channel is notified in real time.
+
+Once a stock has a price + historical closes + at least one pulse snapshot in the table, `GET /stocks/{symbol}/narrative?days=14` returns a narrative that explains the recent bar movement aligned with the prevailing market state (risk-on/off, sector momentum, VIX, 10Y yield, cap rotation). Source: [`src/narrative.ts`](./src/narrative.ts).
+
+To seed a stock (e.g., `TYGO`):
+
+```sh
+curl -X POST "$API_URL/stocks" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"TYGO"}'
+
+# subscribe to the ready signal:
+wscat -c "$REALTIME_URL?token=$API_BEARER_TOKEN&channels=signals"
+> {"action":"subscribe","channels":["signals"],"filters":{"kinds":["alert"]}}
+
+# once ready, fetch the narrative:
+curl -H "Authorization: Bearer $API_BEARER_TOKEN" \
+  "$API_URL/stocks/TYGO/narrative?days=14"
+```
+
 ## 1. Market Regime Detection Capabilities
 
 The system can detect:

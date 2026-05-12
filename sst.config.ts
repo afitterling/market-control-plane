@@ -130,7 +130,7 @@ export default $config({
 
     const processStock = new sst.aws.Function("ProcessStock", {
       handler: "src/processor.processStock",
-      link: [stocks, earnings, events, fmpApiKey],
+      link: [stocks, earnings, events, fmpApiKey, signalsStream],
       timeout: "5 minutes"
     });
 
@@ -252,6 +252,7 @@ export default $config({
 
     api.route("GET /stocks", "src/stocks.list");
     api.route("GET /stocks/{symbol}", "src/stocks.get");
+    api.route("GET /stocks/{symbol}/narrative", "src/narrative.narrative");
     api.route("POST /stocks", "src/stocks.create");
     api.route("POST /stocks/batch", "src/stocks.batchCreate");
 

@@ -4,9 +4,11 @@ import { Resource } from "sst";
 import { publishEvent } from "./events";
 import { cleanSymbol, nowIso } from "./http";
 import { processMacd } from "./macd";
+import { putSignal } from "./streams";
 
 const STOCK_DATA_PULLED_ACTION = "STCO_DATA_PULLED";
 const STOCK_PROCESS_FAILED_ACTION = "STCO_PROCESS_FAILED";
+const STOCK_READY_ACTION = "STCO_READY";
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -142,6 +144,28 @@ export async function processStock(input: { symbol?: string }): Promise<{
       annualCount: annualIncome.length,
       quarterlyCount: quarterlyIncome.length,
       latestNarrative: latest?.analysis.narrative ?? null
+    });
+
+    const readyAt = nowIso();
+    await publishEvent(STOCK_READY_ACTION, {
+      action: STOCK_READY_ACTION,
+      symbol,
+      readyAt,
+      annualCount: annualIncome.length,
+      quarterlyCount: quarterlyIncome.length,
+      latestNarrative: latest?.analysis.narrative ?? null
+    });
+    await putSignal({
+      kind: "alert",
+      status: "stock-ready",
+      alertId: `stock-ready:${symbol}`,
+      payload: {
+        symbol,
+        annualCount: annualIncome.length,
+        quarterlyCount: quarterlyIncome.length,
+        latestNarrative: latest?.analysis.narrative ?? null
+      },
+      at: readyAt
     });
 
     return { symbol, annualCount: annualIncome.length, quarterlyCount: quarterlyIncome.length };
