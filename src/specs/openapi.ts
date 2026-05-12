@@ -20,6 +20,7 @@ export const openApiSpec = {
     { name: "Pulse" },
     { name: "Regime" },
     { name: "Alignment" },
+    { name: "Policy" },
     { name: "Positions" },
     { name: "Docs" }
   ],
@@ -119,6 +120,73 @@ export const openApiSpec = {
           "200": { description: "Stock" },
           "401": { $ref: "#/components/responses/Unauthorized" },
           "404": { $ref: "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/stocks/{symbol}/narrative": {
+      get: {
+        tags: ["Stocks"],
+        summary: "Per-stock narrative aligned with the latest pulse snapshot",
+        parameters: [
+          { name: "symbol", in: "path", required: true, schema: { type: "string" } },
+          { name: "days", in: "query", schema: { type: "integer", minimum: 3, maximum: 60 } }
+        ],
+        responses: {
+          "200": { description: "Narrative" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": { $ref: "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/stocks/{symbol}/movement/{interval}": {
+      get: {
+        tags: ["Stocks"],
+        summary: "Stock movement narrative for a window (1h, 4h, 1d, 1w) aligned with regime, pulse, predictive news, and past records",
+        parameters: [
+          { name: "symbol", in: "path", required: true, schema: { type: "string" } },
+          {
+            name: "interval",
+            in: "path",
+            required: true,
+            schema: { type: "string", enum: ["1h", "4h", "1d", "1w"] }
+          }
+        ],
+        responses: {
+          "200": { description: "Movement narrative for the window" },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": { $ref: "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/stocks/{symbol}/narrative/{interval}": {
+      get: {
+        tags: ["Stocks"],
+        summary: "Alias for /stocks/{symbol}/movement/{interval}",
+        parameters: [
+          { name: "symbol", in: "path", required: true, schema: { type: "string" } },
+          {
+            name: "interval",
+            in: "path",
+            required: true,
+            schema: { type: "string", enum: ["1h", "4h", "1d", "1w"] }
+          }
+        ],
+        responses: {
+          "200": { description: "Movement narrative for the window" },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": { $ref: "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/policy/prediction": {
+      get: {
+        tags: ["Policy"],
+        summary: "Geopolitical policy prediction tile + market policy impact tile (derived from latest pulse + alignment)",
+        responses: {
+          "200": { description: "Policy prediction payload covering Politics Prediction and Market Policy Impact tiles" },
+          "401": { $ref: "#/components/responses/Unauthorized" }
         }
       }
     },

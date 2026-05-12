@@ -28,6 +28,9 @@ Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 | `GET` | `/events` | Poll or long-poll event stream |
 | `GET` | `/stocks` | List stocks |
 | `GET` | `/stocks/{symbol}` | Get one stock |
+| `GET` | `/stocks/{symbol}/narrative` | Stock narrative aligned with the latest pulse snapshot |
+| `GET` | `/stocks/{symbol}/movement/{interval}` | Stock movement narrative for `1h` / `4h` / `1d` / `1w` aligned with regime, pulse, predictive news, and past records |
+| `GET` | `/stocks/{symbol}/narrative/{interval}` | Alias for `/stocks/{symbol}/movement/{interval}` |
 | `POST` | `/stocks` | Cache-or-create one stock (idempotent) |
 | `POST` | `/stocks/batch` | Cache-or-create stocks in batches |
 | `GET` | `/earnings/{symbol}` | List earnings reports for a symbol (annual + quarterly) |
@@ -37,6 +40,7 @@ Source: [diagrams/auth-bearer.mmd](diagrams/auth-bearer.mmd)
 | `DELETE` | `/alerts/{alertId}` | Delete a signal-alert rule |
 | `GET` | `/pulse` | List per-region market-pulse cache rows |
 | `GET` | `/pulse/{region}` | Get the pulse cache row for one region |
+| `GET` | `/policy/prediction` | Politics-prediction + market-policy-impact tile payload |
 | `GET` | `/positions` | List positions |
 | `GET` | `/positions?accountId={accountId}` | List positions for one account |
 | `GET` | `/positions/{accountId}/{symbol}` | Get one position |
@@ -289,3 +293,49 @@ Example response:
   }
 }
 ```
+
+## Stock movement narrative
+
+`GET /stocks/{symbol}/movement/{interval}` (alias: `/stocks/{symbol}/narrative/{interval}`) returns a movement narrative for the stock over a windowed interval. Supported intervals: `1h`, `4h`, `1d`, `1w`.
+
+Each interval maps to a regime scale and a pulse-history lookback:
+
+| Interval | Regime scale | Movement reference | Pulse window |
+| --- | --- | --- | --- |
+| `1h` | `intraday` | session-to-date intraday change | last 1h of pulse snapshots |
+| `4h` | `intraday` | session-to-date intraday change | last 4h of pulse snapshots |
+| `1d` | `daily` | latest close vs prior trading-day close | last 24h of pulse snapshots |
+| `1w` | `weekly` | latest close vs close ~5 trading days back | last 7d of pulse snapshots |
+
+```sh
+curl "$API_URL/stocks/AAPL/movement/1d" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN"
+```
+
+The response contains:
+
+- `movement` — `referencePrice`, `currentPrice`, `changePct`, `direction`, `referenceSource` (`open` / `previous-close` / `historical-close` / `intraday-change`), and a `bars[]` time-series for the window.
+- `regime` — the latest `MarketRegime` row at the matching scale (`classification`, `score`, `topThemes`, `summary`).
+- `pulse` — the latest snapshot's `overallStatus` / `overallScore` / `riskState` / `hotRegions` / VIX, plus `inWindowSnapshots` count and `inWindowThemes[]` aggregated across snapshots that fall inside the window.
+- `alignment` — latest `MarketAlignment` composite (`riskLevel`, `bias`, `biasScore`, `pulseRiskScore`, `hotRegions`) and an `interpretation` (`with-tape` / `against-tape` / `neutral` / `no-data`) comparing the stock's direction against the composite bias.
+- `predictiveNews` — `themes[]` (weighted by region severity + criticality, each tagged `negative` / `neutral` / `positive`), `headlines[]` (most recent pulse links in window), `netSentiment`, and `expectedBias` (`up` / `down` / `neutral`) with a one-line `rationale`.
+- `pastRecords` — recent `MarketAlignment` and matching-scale `MarketRegime` rows, plus `priorWindowChangePct` for the same stock one window back, plus the stock's stored `returns` vector.
+- `drivers[]` — short bullet drivers.
+- `summary` — single-sentence narrative.
+
+## Policy prediction
+
+`GET /policy/prediction` returns a single payload that hydrates the **Politics Prediction** tile and the **Market Policy Impact** tile. It is derived from the latest `MarketPulseSnapshot` (overall + per-region scores + headlines), the previous snapshot (to compute region trend), and the latest `MarketAlignment` (composite risk/bias).
+
+```sh
+curl "$API_URL/policy/prediction" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN"
+```
+
+Response shape:
+
+- `globalRisk` — `level` (`CALM` / `WATCH` / `ELEVATED` / `CRITICAL`), `score`, `narrative`, and per-region chips (`name`, `status`, `trend`).
+- `regions[]` — covers USA, Iran, China, Europe, India, Asia. Each card carries `status` (`LOW` / `MEDIUM` / `HIGH` / `CRITICAL`), `trend` (`escalating` / `stable` / `easing` — computed against the previous snapshot), `title` (top headline), `narrative` (region summary), `prediction` (derived from themes + trend), and `sourceHeadlines[]` (up to 5).
+- `marketImpact` — `magnitude` (`MINOR` / `MODERATE` / `SIGNIFICANT` / `EXTREME`), `stance` (`RISK-ON` / `RISK-OFF` / `NEUTRAL`), `title`, `narrative` (composite bias + VIX context), `themes[]` (each with `signal` of negative/neutral/positive and an affected `sectors[]` list), `sectorsToWatch[]`, and `sourceHeadlines[]` (top 10 across regions sorted by `publishedAt`).
+
+The cadence follows the `PullPulse` cron (every 15 minutes; every 5 in `sst dev`).
