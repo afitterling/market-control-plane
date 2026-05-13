@@ -256,6 +256,10 @@ export default $config({
     api.route("GET /stocks/{symbol}/narrative/{interval}", "src/movement.movement");
     api.route("GET /stocks/{symbol}/movement/{interval}", "src/movement.movement");
     api.route("GET /policy/prediction", "src/policy.prediction");
+
+    api.route("GET /assessments", "src/assessments.list");
+    api.route("GET /assessments/{strategy}", "src/assessments.get");
+    api.route("POST /assessments/{strategy}/{narrative}", "src/assessments.assess");
     api.route("POST /stocks", "src/stocks.create");
     api.route("POST /stocks/batch", "src/stocks.batchCreate");
 

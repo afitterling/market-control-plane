@@ -10,6 +10,7 @@
     "secrets:load": "npx sst secret load .env",
     "dev": "npm run secrets:load && npx sst dev",
     "deploy": "npm run secrets:load && npx sst deploy",
+    "logs": "npx sst logs --stage dev",
     "remove": "npx sst remove",
     "typecheck": "tsc --noEmit"
   },

@@ -1,0 +1,53 @@
+graph TD
+    AS[🧠 ASSESSMENT STRATEGY]
+
+    AS --> VA[📊 Value Investing\nAssessment]
+    AS --> CA[🚀 Catalyst-Based\nAssessment]
+
+    %% Value Investing Branch
+    VA --> VA_PRE[Preconditions]
+    VA_PRE --> VP1[✅ Currently profitable\nwith real cash flows]
+    VA_PRE --> VP2[✅ Stock price significantly\ndeclined from stable level]
+    VA_PRE --> VP3[✅ Decline is sentiment-driven\nnot fundamentals-driven]
+    VA_PRE --> VP4[✅ Cash flows stable\nor growing]
+    VA_PRE --> VP5[✅ No structural threat\nto business model]
+
+    VA --> VA_NAR[Narratives]
+    VA_NAR --> VN1[💰 Sentiment Overcorrection\non Profitable Business]
+    VN1 --> VN1_EX[Example: SFM\nDCF · EV/EBITDA · P/FCF]
+
+    %% Catalyst-Based Branch
+    CA --> CA_PRE[Preconditions]
+    CA_PRE --> CP1[✅ Revenue growing\nconsistently]
+    CA_PRE --> CP2[✅ EPS losses narrowing\ndirectionally]
+    CA_PRE --> CP3[✅ Gross margin stable\nor expanding]
+    CA_PRE --> CP4[✅ Operating leverage\ndemonstrable]
+    CA_PRE --> CP5[✅ No one-time items\nmasking trajectory]
+    CA_PRE --> CP6[✅ Balance sheet survives\nuntil crossover]
+
+    CA --> CA_NAR[Narratives]
+    CA_NAR --> CN1[⚡ EPS Crossover —\nLoss to Profit Turnaround]
+    CN1 --> CN1_EX[Example: TBLA at crossover\nTYGO pre-crossover]
+    CN1 --> CN1_STAGE[Stages]
+    CN1_STAGE --> S1[Pre-Crossover\neg. TYGO]
+    CN1_STAGE --> S2[At Crossover\neg. TBLA Q1 2026]
+    CN1_STAGE --> S3[Post-Crossover\nMultiple Re-rating]
+
+    %% Styling
+    classDef strategy fill:#1a1a2e,stroke:#e94560,stroke-width:3px,color:#fff,font-weight:bold
+    classDef assessment fill:#16213e,stroke:#0f3460,stroke-width:2px,color:#e0e0e0
+    classDef precond fill:#0f3460,stroke:#533483,stroke-width:1px,color:#ccc
+    classDef precondItem fill:#533483,stroke:#533483,stroke-width:1px,color:#fff,font-size:11px
+    classDef narrative fill:#e94560,stroke:#e94560,stroke-width:2px,color:#fff,font-weight:bold
+    classDef example fill:#1a1a2e,stroke:#e94560,stroke-width:1px,color:#aaa,font-size:11px
+    classDef stage fill:#0f3460,stroke:#e94560,stroke-width:1px,color:#fff
+
+    class AS strategy
+    class VA,CA assessment
+    class VA_PRE,CA_PRE precond
+    class VP1,VP2,VP3,VP4,VP5,CP1,CP2,CP3,CP4,CP5,CP6 precondItem
+    class VA_NAR,CA_NAR precond
+    class VN1,CN1 narrative
+    class VN1_EX,CN1_EX example
+    class CN1_STAGE precond
+    class S1,S2,S3 stage
