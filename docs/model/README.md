@@ -19,14 +19,19 @@ The source-of-truth diagram is [`assessment-strategy.mmd`](./assessment-strategy
 - **Thesis**: Profitable businesses where sentiment overcorrected price relative to durable cash flows.
 - **Preconditions**: profitable today, significant price decline from stable level, decline is sentiment-driven, cash flows stable/growing, no structural business-model threat.
 - **Narratives**:
-  - `sentiment-overcorrection` — Sentiment Overcorrection on Profitable Business. Valuation levers: DCF, EV/EBITDA, P/FCF.
+  - `sentiment-overcorrection` — **💰 Sentiment Overcorrection on Profitable Business.** A fundamentally healthy, cash-generating business gets sold off heavily due to sentiment, macro fear, or short-term disappointment — not because the underlying economics broke. The stock price detaches from intrinsic value; a DCF or cash flow multiple reveals the gap; mean reversion to fair value is the return mechanism. Valuation levers: DCF, EV/EBITDA, P/FCF. _Example: SFM — profitable, growing, but stock dropped ~59% on sentiment; cash flows never deteriorated._
 
 ### Catalyst-Based (`catalyst`)
 - **Model**: `claude-opus-4-7`
 - **Thesis**: Pre-profitable businesses converging on an EPS crossover where multiple re-rating is the catalyst.
 - **Preconditions**: revenue growing consistently, EPS losses narrowing, gross margin stable/expanding, operating leverage, no one-time items, balance sheet survives until crossover.
 - **Narratives**:
-  - `eps-crossover` — EPS Crossover, Loss-to-Profit Turnaround. Stages: Pre-Crossover (e.g. TYGO), At Crossover (e.g. TBLA Q1 2026), Post-Crossover (multiple re-rating).
+  - `eps-crossover` — **⚡ EPS Crossover — Loss to Profit Turnaround.** A loss-making company with growing revenue and narrowing EPS losses approaches zero and crosses into profitability. The market, which had been pricing it on a compressed revenue multiple, is forced to re-classify and re-rate it onto an earnings multiple. The crossover moment — especially when it beats a negative consensus — triggers a disproportionate price reaction.
+    - **Pre-Crossover** — losses narrowing, not yet profitable (e.g. TYGO)
+    - **At Crossover** — first positive EPS print, consensus beat (e.g. TBLA Q1 2026)
+    - **Post-Crossover** — sustained profitability, multiple expansion continues
+
+    _Example: TBLA — EPS went -$0.08 → -$0.03 → +$0.20, stock surged 37% in one session._
 
 ## API
 

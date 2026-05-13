@@ -60,6 +60,86 @@ curl -H "Authorization: Bearer $API_BEARER_TOKEN" \
   "$API_URL/stocks/TYGO/narrative?days=14"
 ```
 
+### Assessments
+
+On top of the bar-level narrative, the control plane runs **thesis-driven assessments** — single-stock evaluations that frame a stock against an assessment strategy and a specific narrative pattern. Each strategy carries a model, a base prompt, a list of preconditions that gate eligibility, and one or more narratives that specialise the prompt against a thesis. Source-of-truth model: [`docs/model/README.md`](./docs/model/README.md). Implementation: [`src/assessments.ts`](./src/assessments.ts).
+
+Two strategies ship today:
+
+- **💰 Value Investing (`value`)** — profitable businesses where sentiment overcorrected the price relative to durable cash flows.
+  - Narrative `sentiment-overcorrection` — a fundamentally healthy, cash-generating business gets sold off on sentiment, macro fear, or short-term disappointment. Price detaches from intrinsic value; DCF / cash-flow multiples reveal the gap; mean reversion is the return mechanism. _Example: SFM dropped ~59% on sentiment while cash flows kept growing._
+- **⚡ Catalyst-Based (`catalyst`)** — pre-profitable businesses converging on an EPS crossover where multiple re-rating is the catalyst.
+  - Narrative `eps-crossover` — a loss-making company with growing revenue and narrowing EPS losses crosses into profitability. The market, which had been pricing it on a compressed revenue multiple, is forced to re-rate it onto an earnings multiple; the crossover quarter — especially when it beats a negative consensus — triggers a disproportionate price reaction. Stages: **Pre-Crossover** (e.g. TYGO), **At Crossover** (e.g. TBLA Q1 2026), **Post-Crossover** (sustained profitability, multiple expansion continues). _Example: TBLA — EPS went -$0.08 → -$0.03 → +$0.20, stock surged 37% in one session._
+
+```sh
+# list strategies and their narratives
+curl -H "Authorization: Bearer $API_BEARER_TOKEN" "$API_URL/assessments"
+
+# run the eps-crossover narrative against a stock (hydrates from the Stocks table)
+curl -X POST "$API_URL/assessments/catalyst/eps-crossover" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"TBLA"}'
+```
+
+#### Example: `POST /assessments/catalyst/eps-crossover` for `TBLA`
+
+On invocation the handler hydrates the stock row, pulls the last 8 quarterly earnings rows from the `Earnings` table, deterministically evaluates each precondition against that history, computes an eligibility verdict (depth + precondition gates), and renders a prompt that embeds the narrative story verbatim. Response shape (abridged):
+
+```json
+{
+  "generatedAt": "2026-05-13T...",
+  "strategy": { "id": "catalyst", "name": "Catalyst-Based Assessment", "model": "claude-opus-4-7" },
+  "narrative": { "id": "eps-crossover", "name": "EPS Crossover — Loss to Profit Turnaround" },
+  "stock": { "symbol": "TBLA", "sector": "Communication Services", "price": 4.12, "priceAsOf": "2026-05-13" },
+  "preconditions": [
+    { "code": "REVENUE_GROWING",       "status": "met",     "evidence": "revenue growth positive in 4/4 of the last quarters" },
+    { "code": "EPS_NARROWING",         "status": "met",     "evidence": "EPS crossed zero (-0.08 → 0.20)" },
+    { "code": "GROSS_MARGIN_STABLE",   "status": "met",     "evidence": "gross margin stable/expanding (62.1% → 64.7%)" },
+    { "code": "OPERATING_LEVERAGE",    "status": "met",     "evidence": "operating margin expanding in 3/4 of the last quarters" },
+    { "code": "NO_ONE_TIME_ITEMS",     "status": "unknown", "evidence": "qualitative — defer to LLM judgment on filings" },
+    { "code": "BALANCE_SHEET_SURVIVES","status": "unknown", "evidence": "qualitative — requires balance-sheet data not in stock row" }
+  ],
+  "eligibility": {
+    "eligible": true,
+    "depth": { "quartersAvailable": 8, "quartersRequired": 4, "sufficient": true },
+    "preconditionsMet": 4,
+    "preconditionsTotal": 6,
+    "passRatio": 1.00,
+    "reasons": []
+  },
+  "prompt": "You are a growth-and-catalyst analyst...\n## Narrative\n⚡ Narrative — EPS Crossover: Loss to Profit Turnaround\n(Assessment Type: Catalyst-Based)\n\nThe story: A loss-making company with growing revenue and narrowing EPS losses approaches zero and crosses into profitability...\n\n## Eligibility\nDepth: 8/4 quarters available (sufficient).\nPreconditions met: 4/6 (pass ratio 1.00).\nStock is eligible — proceed with the assessment.\n\n## Preconditions (evaluated)\n- [REVENUE_GROWING] (MET) Revenue growing consistently — revenue growth positive in 4/4 of the last quarters\n- [EPS_NARROWING] (MET) EPS losses narrowing directionally — EPS crossed zero (-0.08 → 0.20)\n...\n\n## Quarterly history (most recent first)\n2026-03-31: EPS 0.20, Rev 412.30, RevGrowth 14.2%\n2025-12-31: EPS -0.03, Rev 396.80, RevGrowth 11.8%\n2025-09-30: EPS -0.05, Rev 372.10, RevGrowth 9.4%\n2025-06-30: EPS -0.08, Rev 358.40, RevGrowth 6.7%\n...",
+  "status": "prepared",
+  "note": "LLM execution not wired; this response returns the rendered prompt and stock context ready for inference."
+}
+```
+
+If the stock lacks the **fundamental depth** required (fewer than 4 quarterly earnings rows) or fails the strategy's core preconditions, the response flips to `status: "ineligible"`, populates `eligibility.reasons`, and — for the catalyst path on an already-profitable stock — suggests the value path instead:
+
+```json
+{
+  "status": "ineligible",
+  "eligibility": {
+    "eligible": false,
+    "depth": { "quartersAvailable": 2, "quartersRequired": 4, "sufficient": false },
+    "preconditionsMet": 1,
+    "preconditionsTotal": 6,
+    "passRatio": 0.50,
+    "reasons": [
+      "requires ≥4 quarters of earnings history (have 2)",
+      "EPS_NARROWING unmet — already profitable across the window (0.14 → 0.21) — not a loss-narrowing setup"
+    ],
+    "suggestedAlternative": {
+      "strategy": "value",
+      "narrative": "sentiment-overcorrection",
+      "reason": "stock is already profitable — evaluate the value/sentiment-overcorrection narrative instead"
+    }
+  }
+}
+```
+
+The precondition gates ("has depth", EPS narrowing, revenue growing) are evaluated **before** the LLM call — so by the time the prompt reaches the model, it carries the narrative story, the precondition verdicts with evidence, the quarterly EPS series, and the eligibility verdict. Source: [`src/assessments.ts`](./src/assessments.ts).
+
 ## 1. Market Regime Detection Capabilities
 
 The system can detect:
