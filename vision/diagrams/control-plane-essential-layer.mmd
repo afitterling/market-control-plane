@@ -1,0 +1,116 @@
+%% rendered: ./control-plane-essential-layer.svg
+%% regenerate: mmdc -i control-plane-essential-layer.mmd -o control-plane-essential-layer.svg -b transparent -p ../../doc/diagrams/puppeteer.json
+flowchart TB
+
+  %% ───────────────────────────── Sources (top) ─────────────────────────────
+  subgraph Sources ["Sources of truth"]
+    direction LR
+    src_fmp[("FMP<br/>quotes · fundamentals · news")]
+    src_macro[("Macro feeds<br/>rates · CPI · liquidity")]
+    src_geo[("Geopolitical wires<br/>conflict · sanctions · trade")]
+    src_alt[("Alternative inputs<br/>filings · alt-data")]
+  end
+
+  %% ───────────────────────────── The essential layer ───────────────────────
+  subgraph MCP ["⬛ Market Control Plane — the essential layer"]
+    direction TB
+
+    subgraph Ingest ["Ingest"]
+      ing_prices["Prices &amp; technicals"]
+      ing_fund["Fundamentals"]
+      ing_news["News &amp; pulse"]
+      ing_macro["Macro &amp; geopolitics"]
+    end
+
+    subgraph Reason ["Reasoning · pruned FAU models"]
+      r_regime["Regime classification"]
+      r_score["Fundamental scoring"]
+      r_pulse["Market pulse"]
+      r_assess["Thesis assessments<br/>value · catalyst"]
+      r_align["Alignment &amp; allocation"]
+    end
+
+    subgraph State ["State of the world"]
+      st_stocks[("Stocks · Earnings · Industries")]
+      st_pulse[("MarketPulse · Snapshot · Regime · Alignment")]
+      st_events[("Events · Signals · Ticks")]
+    end
+
+    subgraph Surfaces ["Egress surfaces — single contract"]
+      sf_rest["REST API<br/>OpenAPI · Bearer auth"]
+      sf_ws["WebSocket<br/>AsyncAPI · per-symbol/region/kind"]
+      sf_kinesis["Kinesis streams<br/>Ticks · Signals · PulseEvents"]
+      sf_mcp["MCP server<br/>tools · resources · prompts"]
+    end
+  end
+
+  %% ───────────────────────────── Subjects (bottom) ─────────────────────────
+  subgraph Subjects ["Subjects — every consumer goes through the control plane"]
+    direction LR
+
+    subgraph Human ["Human-facing"]
+      sub_web["Web apps<br/>Remix · Next dashboards"]
+      sub_native["Native apps<br/>iOS · Android · desktop"]
+      sub_notebook["Notebooks<br/>research · backtests"]
+    end
+
+    subgraph AI ["AI-facing"]
+      sub_assistant["AI assistants<br/>Claude · ChatGPT · custom"]
+      sub_mcp["MCP clients<br/>Claude Code · IDE agents"]
+      sub_agent["Autonomous agents<br/>scheduled · event-driven"]
+    end
+
+    subgraph Machine ["Machine-to-machine"]
+      sub_exec["Execution adapters<br/>brokers · custodians"]
+      sub_risk["Risk &amp; compliance<br/>exposure · limits"]
+      sub_partner["Partner platforms<br/>white-label · embedded"]
+    end
+  end
+
+  %% ───────────────────────────── Edges ─────────────────────────────────────
+  src_fmp --> Ingest
+  src_macro --> Ingest
+  src_geo --> Ingest
+  src_alt --> Ingest
+
+  Ingest --> State
+  Reason --> State
+  State --> Reason
+  Reason --> Surfaces
+  State --> Surfaces
+
+  Surfaces -- "request / response" --> sub_web
+  Surfaces -- "request / response" --> sub_native
+  Surfaces -- "snapshots" --> sub_notebook
+  Surfaces -- "tools · resources" --> sub_assistant
+  Surfaces -- "MCP protocol" --> sub_mcp
+  Surfaces -- "subscriptions" --> sub_agent
+  Surfaces -- "allocation signals" --> sub_exec
+  Surfaces -- "exposure events" --> sub_risk
+  Surfaces -- "embedded API" --> sub_partner
+
+  %% Every action by a subject re-enters the plane — nothing bypasses it.
+  sub_exec -. "fills · positions" .-> sf_rest
+  sub_risk -. "limit breaches" .-> sf_rest
+  sub_assistant -. "user intents" .-> sf_mcp
+  sub_mcp -. "tool calls" .-> sf_mcp
+  sub_agent -. "rule changes" .-> sf_rest
+
+  %% ───────────────────────────── Styles ────────────────────────────────────
+  classDef src     fill:#fef2f2,stroke:#ef4444,color:#7f1d1d,font-weight:bold
+  classDef ingest  fill:#ecfeff,stroke:#06b6d4,color:#155e75,font-weight:bold
+  classDef reason  fill:#fdf4ff,stroke:#a855f7,color:#581c87,font-weight:bold
+  classDef state   fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,font-weight:bold
+  classDef surface fill:#fefce8,stroke:#eab308,color:#713f12,font-weight:bold
+  classDef sub     fill:#f0fdf4,stroke:#22c55e,color:#166534,font-weight:bold
+
+  class src_fmp,src_macro,src_geo,src_alt src
+  class ing_prices,ing_fund,ing_news,ing_macro ingest
+  class r_regime,r_score,r_pulse,r_assess,r_align reason
+  class st_stocks,st_pulse,st_events state
+  class sf_rest,sf_ws,sf_kinesis,sf_mcp surface
+  class sub_web,sub_native,sub_notebook,sub_assistant,sub_mcp,sub_agent,sub_exec,sub_risk,sub_partner sub
+
+  style MCP fill:#0b1220,stroke:#facc15,stroke-width:3px,color:#facc15
+  style Sources fill:#fff1f2,stroke:#ef4444,stroke-dasharray: 4 2
+  style Subjects fill:#f7fee7,stroke:#22c55e,stroke-dasharray: 4 2
