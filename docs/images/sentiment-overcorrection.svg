@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif">
+  <defs>
+    <linearGradient id="bgV" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F1F5F9"/>
+    </linearGradient>
+    <linearGradient id="gap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#EF4444" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bgV)"/>
+
+  <text x="80" y="80" fill="#3B82F6" font-size="14" letter-spacing="3" font-weight="600">💰 VALUE INVESTING NARRATIVE</text>
+  <text x="80" y="130" fill="#0F172A" font-size="52" font-weight="700" letter-spacing="-1.5">Sentiment Overcorrection</text>
+  <text x="80" y="172" fill="#64748B" font-size="22" font-weight="400">Price detaches from cash flows. Mean reversion is the return mechanism.</text>
+
+  <g transform="translate(80,240)">
+    <line x1="0" y1="0"   x2="1040" y2="0"   stroke="#E2E8F0" stroke-width="1"/>
+    <line x1="0" y1="60"  x2="1040" y2="60"  stroke="#E2E8F0" stroke-width="1"/>
+    <line x1="0" y1="120" x2="1040" y2="120" stroke="#E2E8F0" stroke-width="1"/>
+    <line x1="0" y1="180" x2="1040" y2="180" stroke="#E2E8F0" stroke-width="1"/>
+    <line x1="0" y1="240" x2="1040" y2="240" stroke="#E2E8F0" stroke-width="1"/>
+    <line x1="0" y1="0"   x2="0" y2="240" stroke="#94A3B8" stroke-width="1.5"/>
+    <line x1="0" y1="240" x2="1040" y2="240" stroke="#94A3B8" stroke-width="1.5"/>
+
+    <path d="M0 60 L1040 60 L1040 200 L0 200 Z" fill="url(#gap)" opacity="0.0"/>
+    <path d="M40,30 L160,40 L280,55 L400,50 L520,60 L640,65 L760,70 L880,68 L1000,72
+             L1000,200 L880,180 L760,165 L640,160 L520,150 L400,135 L280,110 L160,80 L40,30 Z"
+          fill="url(#gap)"/>
+
+    <polyline points="40,30 160,40 280,55 400,50 520,60 640,65 760,70 880,68 1000,72"
+              fill="none" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1010" y="68" fill="#3B82F6" font-size="13" font-weight="700">Intrinsic Value</text>
+    <text x="1010" y="84" fill="#3B82F6" font-size="11">(DCF · cash flows steady)</text>
+
+    <polyline points="40,30 160,55 280,70 400,90 520,140 640,180 760,200 820,180 940,140 1000,110"
+              fill="none" stroke="#EF4444" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1010" y="115" fill="#EF4444" font-size="13" font-weight="700">Price (-59%)</text>
+    <text x="1010" y="131" fill="#EF4444" font-size="11">(sentiment overcorrects)</text>
+
+    <g transform="translate(760,200)">
+      <circle r="9" fill="#EF4444"/>
+      <circle r="14" fill="none" stroke="#EF4444" stroke-width="2" opacity="0.45"/>
+    </g>
+    <text x="760" y="232" fill="#EF4444" font-size="12" text-anchor="middle" font-weight="700">Maximum dislocation</text>
+
+    <g>
+      <path d="M820 195 Q900 170 990 115" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-dasharray="6 5"/>
+      <polygon points="985,108 1003,115 990,127" fill="#22C55E"/>
+    </g>
+    <text x="900" y="80" fill="#22C55E" font-size="13" font-weight="700" text-anchor="middle">Mean reversion</text>
+    <text x="900" y="96" fill="#22C55E" font-size="11" text-anchor="middle">price catches up to intrinsic value</text>
+  </g>
+
+  <g transform="translate(80,560)">
+    <rect width="380" height="50" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+    <text x="16" y="22" fill="#94A3B8" font-size="11" letter-spacing="2">EXAMPLE</text>
+    <text x="16" y="42" fill="#0F172A" font-size="14" font-weight="600">SFM — profitable, growing, dropped ~59% on sentiment.</text>
+  </g>
+  <g transform="translate(480,560)">
+    <rect width="280" height="50" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+    <text x="16" y="22" fill="#94A3B8" font-size="11" letter-spacing="2">VALUATION LEVERS</text>
+    <text x="16" y="42" fill="#0F172A" font-size="14" font-weight="600">DCF · EV/EBITDA · P/FCF</text>
+  </g>
+  <g transform="translate(780,560)">
+    <rect width="340" height="50" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+    <text x="16" y="22" fill="#94A3B8" font-size="11" letter-spacing="2">RETURN MECHANISM</text>
+    <text x="16" y="42" fill="#0F172A" font-size="14" font-weight="600">Mean reversion to fair value</text>
+  </g>
+</svg>
