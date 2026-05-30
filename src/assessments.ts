@@ -84,6 +84,97 @@ const VALUE_STRATEGY: AssessmentStrategy = {
         "Triangulate fair value using DCF, EV/EBITDA, and P/FCF.",
         "State the implied upside vs current price and the catalyst that resets sentiment toward fair value."
       ].join(" ")
+    },
+    {
+      id: "quality-derating",
+      name: "Quality Compounder De-Rating",
+      icon: "🏰",
+      description:
+        "A durable, high-return compounder whose multiple compressed on a growth scare or factor rotation while the underlying economics stayed intact; re-rating back toward its historical multiple band is the return mechanism.",
+      story: [
+        "🏰 Narrative — Quality Compounder De-Rating",
+        "(Assessment Type: Value Investing)",
+        "",
+        "The story: A high-quality business — wide moat, high returns on capital, consistent free cash flow — gets de-rated",
+        "because growth decelerated for a quarter or two, a factor rotation pushed money out of quality, or a temporary margin",
+        "wobble spooked the market. The compounding engine is intact; only the multiple compressed. The gap shows up as a P/E or",
+        "EV/EBIT well below the company's own multi-year average despite an unchanged competitive position. Re-rating back toward",
+        "the historical band, on top of continued compounding, is the return mechanism.",
+        "",
+        "Example: a 20%+ ROIC franchise that fell from ~28x to ~17x forward earnings on a single soft guide, with the moat untouched."
+      ].join("\n"),
+      example: "A 20%+ ROIC franchise de-rated from ~28x to ~17x forward earnings on one soft guide — moat and reinvestment runway intact.",
+      valuationLevers: ["Forward P/E vs own 5y band", "EV/EBIT", "ROIC × reinvestment runway"],
+      promptTemplate: [
+        "Narrative: Quality Compounder De-Rating.",
+        "Establish that returns on capital and the moat are intact and that the de-rate is multiple-driven, not earnings-driven.",
+        "Compare the current multiple to the company's own multi-year average band and quantify the re-rating upside plus continued compounding.",
+        "State what reset the multiple and what would re-rate it."
+      ].join(" ")
+    },
+    {
+      id: "cyclical-trough",
+      name: "Cyclical Trough Mispricing",
+      icon: "🔄",
+      description:
+        "A cyclical business near the bottom of its cycle where the market extrapolates depressed trough earnings as permanent; normalized mid-cycle earnings power reveals the mispricing and normalization is the return mechanism.",
+      story: [
+        "🔄 Narrative — Cyclical Trough Mispricing",
+        "(Assessment Type: Value Investing)",
+        "",
+        "The story: A cyclical company — commodities, semis, housing, freight, memory — is near a cyclical trough. Earnings are",
+        "depressed or briefly negative, headlines are bleak, and the market capitalizes trough EPS as if it were permanent. The",
+        "error is extrapolation: pricing the worst point of the cycle into perpetuity. Normalized mid-cycle earnings power,",
+        "replacement value, or through-cycle free cash flow reveal the gap. The return mechanism is normalization as the cycle turns.",
+        "Counter-intuitively, a cyclical can look 'expensive' on trough P/E precisely when it is cheapest on normalized earnings.",
+        "",
+        "Three stages:",
+        "- Down-Cycle — earnings falling, estimates still being cut",
+        "- Trough — earnings depressed/negative, inventories peaking, sentiment capitulating",
+        "- Early Recovery — orders/pricing inflecting, estimates beginning to rise",
+        "",
+        "Example: a semi-cap or memory name trading near tangible book at the bottom of an inventory cycle, with mid-cycle EPS multiples higher than trough."
+      ].join("\n"),
+      example: "A cyclical trading near tangible book at the bottom of an inventory cycle — trough EPS depressed, normalized mid-cycle earnings several times higher.",
+      stages: [
+        { id: "downcycle", name: "Down-Cycle", example: "Earnings falling, estimates still being cut" },
+        { id: "trough", name: "Trough", example: "Earnings depressed/negative, inventories peaking, sentiment capitulating" },
+        { id: "recovery", name: "Early Recovery", example: "Orders/pricing inflecting, estimates beginning to rise" }
+      ],
+      valuationLevers: ["Normalized mid-cycle EPS", "Price/tangible book vs cycle", "Through-cycle FCF / replacement value"],
+      promptTemplate: [
+        "Narrative: Cyclical Trough Mispricing.",
+        "Place the stock in the cycle (Down-Cycle, Trough, Early Recovery) and avoid valuing it on trough EPS alone.",
+        "Estimate normalized mid-cycle earnings power and value off that, cross-checked against price/tangible book versus prior cycle lows.",
+        "Identify the indicator that signals the cycle is turning and the risk that the trough deepens or extends."
+      ].join(" ")
+    },
+    {
+      id: "capital-return",
+      name: "Underappreciated Capital Return",
+      icon: "💸",
+      description:
+        "A profitable, cash-generative business steadily shrinking its share count and/or growing its dividend at a high free-cash-flow yield the market is ignoring; buyback-driven EPS accretion plus yield is the return mechanism.",
+      story: [
+        "💸 Narrative — Underappreciated Capital Return",
+        "(Assessment Type: Value Investing)",
+        "",
+        "The story: A mature, profitable business throws off far more free cash flow than the market is paying for. Management",
+        "returns it aggressively — buying back a meaningful share of the float each year and/or compounding the dividend — yet the",
+        "stock trades at a high FCF yield because the story is 'boring' or growth is modest. Each buyback at a depressed price is",
+        "accretive: shrinking the share count lifts per-share earnings and ownership even with flat net income. The return mechanism",
+        "is FCF yield plus the mechanical EPS accretion of the shrink, with optional re-rating if the market re-discovers the cash machine.",
+        "",
+        "Example: a steady cash generator at a low-double-digit FCF yield retiring ~5%+ of shares a year while growing its dividend."
+      ].join("\n"),
+      example: "A steady cash generator at a low-double-digit FCF yield retiring ~5%+ of its float annually while compounding the dividend.",
+      valuationLevers: ["FCF yield", "Buyback-adjusted EPS accretion", "Shareholder yield (buyback + dividend)"],
+      promptTemplate: [
+        "Narrative: Underappreciated Capital Return.",
+        "Quantify free-cash-flow yield, net buyback pace (share-count change), and dividend growth to derive total shareholder yield.",
+        "Show the per-share accretion from continued buybacks at the current price and the downside protection the cash return provides.",
+        "Flag any risk that the capital return is debt-funded or unsustainable versus FCF."
+      ].join(" ")
     }
   ]
 };
@@ -141,6 +232,43 @@ const CATALYST_STRATEGY: AssessmentStrategy = {
         "Narrative: EPS Crossover — Loss to Profit Turnaround.",
         "Place the stock in one of: Pre-Crossover, At Crossover, Post-Crossover.",
         "Estimate quarters-to-crossover, the multiple re-rating path from revenue-multiple to earnings-multiple, and risk to thesis."
+      ].join(" ")
+    },
+    {
+      id: "margin-inflection",
+      name: "Margin Inflection — Operating Leverage Unlock",
+      icon: "📈",
+      description:
+        "An already-profitable, revenue-growing business hitting the scale point where a heavy fixed-cost base converts incremental revenue into disproportionate margin and EPS expansion ahead of consensus; upward estimate revisions are the return mechanism.",
+      story: [
+        "📈 Narrative — Margin Inflection: Operating Leverage Unlock",
+        "(Assessment Type: Catalyst-Based)",
+        "",
+        "The story: A company has spent years building a fixed-cost base — platform, R&D, salesforce, infrastructure — and is now",
+        "growing revenue on top of it. Past the scale point, incremental revenue drops to the operating line at a high rate, so",
+        "margins expand far faster than revenue and EPS compounds non-linearly. Consensus typically straight-lines historical",
+        "margins and misses the inflection. The crossover here is not loss-to-profit but a step-change in incremental margins;",
+        "the return mechanism is upward estimate revisions as reported margins outrun the model.",
+        "",
+        "Three stages:",
+        "- Pre-Inflection — revenue growing, margins flattish, fixed costs still being absorbed",
+        "- At Inflection — incremental margins jump, first quarters of clear operating leverage, estimate revisions start",
+        "- Post-Inflection — operating leverage sustained, multiple expands as the market extrapolates the new margin trajectory",
+        "",
+        "Example: a scaled software or platform business whose incremental operating margin steps from the teens toward 40%+ as opex growth lags revenue."
+      ].join("\n"),
+      example: "A scaled platform whose incremental operating margin steps from the teens toward 40%+ as opex growth lags revenue growth.",
+      stages: [
+        { id: "pre", name: "Pre-Inflection", example: "Revenue growing, margins flat, fixed costs still absorbed" },
+        { id: "at", name: "At Inflection", example: "Incremental margins jump, estimate revisions begin" },
+        { id: "post", name: "Post-Inflection", example: "Operating leverage sustained, multiple expansion" }
+      ],
+      valuationLevers: ["Incremental operating margin", "Opex growth vs revenue growth", "Forward EPS on normalized margins"],
+      promptTemplate: [
+        "Narrative: Margin Inflection — Operating Leverage Unlock.",
+        "Place the stock in Pre-Inflection, At Inflection, or Post-Inflection and confirm revenue growth is outpacing opex growth.",
+        "Estimate the incremental operating margin and the forward EPS it implies versus consensus, and the re-rating from rising estimates.",
+        "Flag the risk that management re-invests the leverage away or that growth decelerates before the fixed base is absorbed."
       ].join(" ")
     }
   ]
@@ -514,31 +642,43 @@ function computeEligibility(
   const reasons: string[] = [];
   let eligible = true;
 
-  if (strategy.id === "catalyst" && narrative.id === "eps-crossover") {
+  if (strategy.id === "catalyst") {
     if (!depth.sufficient) {
       eligible = false;
       reasons.push(`requires ≥${depth.quartersRequired} quarters of earnings history (have ${depth.quartersAvailable})`);
-    }
-    const epsNarrowing = results.find((result) => result.code === "EPS_NARROWING");
-    if (epsNarrowing?.status === "unmet") {
-      eligible = false;
-      reasons.push(`EPS_NARROWING unmet — ${epsNarrowing.evidence}`);
     }
     const revGrowing = results.find((result) => result.code === "REVENUE_GROWING");
     if (revGrowing?.status === "unmet") {
       eligible = false;
       reasons.push(`REVENUE_GROWING unmet — ${revGrowing.evidence}`);
     }
-  } else if (strategy.id === "value" && narrative.id === "sentiment-overcorrection") {
-    const profitable = results.find((result) => result.code === "PROFITABLE");
-    if (profitable?.status === "unmet") {
-      eligible = false;
-      reasons.push(`PROFITABLE unmet — ${profitable.evidence}`);
+    if (narrative.id === "eps-crossover") {
+      const epsNarrowing = results.find((result) => result.code === "EPS_NARROWING");
+      if (epsNarrowing?.status === "unmet") {
+        eligible = false;
+        reasons.push(`EPS_NARROWING unmet — ${epsNarrowing.evidence}`);
+      }
+    } else if (narrative.id === "margin-inflection") {
+      const opLeverage = results.find((result) => result.code === "OPERATING_LEVERAGE");
+      if (opLeverage?.status === "unmet") {
+        eligible = false;
+        reasons.push(`OPERATING_LEVERAGE unmet — ${opLeverage.evidence}`);
+      }
     }
+  } else if (strategy.id === "value") {
     const priceDecline = results.find((result) => result.code === "PRICE_DECLINE");
     if (priceDecline?.status === "unmet") {
       eligible = false;
       reasons.push(`PRICE_DECLINE unmet — ${priceDecline.evidence}`);
+    }
+    // Cyclical-trough names are often at/near a loss at the bottom of the cycle,
+    // so current profitability is not a gate for that narrative.
+    if (narrative.id !== "cyclical-trough") {
+      const profitable = results.find((result) => result.code === "PROFITABLE");
+      if (profitable?.status === "unmet") {
+        eligible = false;
+        reasons.push(`PROFITABLE unmet — ${profitable.evidence}`);
+      }
     }
   }
 
@@ -574,7 +714,7 @@ function suggestAlternative(
     }
     return undefined;
   }
-  if (strategy.id === "value" && narrative.id === "sentiment-overcorrection") {
+  if (strategy.id === "value" && narrative.id !== "cyclical-trough") {
     return {
       strategy: "catalyst",
       narrative: "eps-crossover",
