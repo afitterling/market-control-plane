@@ -2,6 +2,10 @@ import "sst";
 
 declare module "sst" {
   export interface Resource {
+    ANTHROPIC_API_KEY: {
+      value: string;
+      type: "sst.sst.Secret";
+    };
     API_BEARER_TOKEN: {
       value: string;
       type: "sst.sst.Secret";
@@ -64,6 +68,10 @@ declare module "sst" {
       type: "sst.aws.Dynamo";
     };
     MarketPulseSnapshot: {
+      name: string;
+      type: "sst.aws.Dynamo";
+    };
+    FinancialPolicyCache: {
       name: string;
       type: "sst.aws.Dynamo";
     };

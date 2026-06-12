@@ -1,7 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { Resource } from "sst";
-import { sendTo, VALID_CHANNELS, type Channel } from "./wsConnection";
+import { sendTo, VALID_CHANNELS, WS_CHANNEL_INDEX, type Channel } from "./wsConnection";
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -19,7 +19,6 @@ type KinesisLambdaEvent = {
 
 type Subscriber = {
   connectionId: string;
-  channels?: string[];
   filters?: { symbols?: string[]; regions?: string[]; kinds?: string[] };
 };
 
@@ -89,16 +88,17 @@ async function loadSubscribers(channel: Channel): Promise<Subscriber[]> {
   let exclusiveStartKey: Record<string, unknown> | undefined;
   do {
     const response = await documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: Resource.WsConnections.name,
+        IndexName: WS_CHANNEL_INDEX,
+        KeyConditionExpression: "#channel = :channel",
+        ExpressionAttributeNames: { "#channel": "channel" },
+        ExpressionAttributeValues: { ":channel": channel },
         ExclusiveStartKey: exclusiveStartKey
       })
     );
     for (const item of (response.Items ?? []) as Subscriber[]) {
-      if (!item.channels || item.channels.length === 0) continue;
-      if (item.channels.includes(channel)) {
-        out.push(item);
-      }
+      out.push(item);
     }
     exclusiveStartKey = response.LastEvaluatedKey;
   } while (exclusiveStartKey);

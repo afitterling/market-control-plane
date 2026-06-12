@@ -7,6 +7,7 @@ import {
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { cleanSymbol, error, json, nowIso, requireBearerToken } from "./http";
+import { safeAnalyze } from "./claude";
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const PULSE_SCOPE = "global";
@@ -158,7 +159,14 @@ export async function narrative(event: APIGatewayProxyEventV2): Promise<APIGatew
     drivers
   };
 
-  return json({ narrative: payload });
+  const { analysis, analysisError } = await safeAnalyze({
+    system:
+      "You are an equity analyst writing a concise, plain-English narrative for a single stock. Explain what moved the stock over the window and how it sits relative to its sector and the broader market regime. Be specific and quantitative; never invent figures.",
+    instruction: `Write a 2-3 paragraph narrative for ${symbol} covering the ${days}-day window: the move itself, sector alignment, and the market backdrop.`,
+    context: payload
+  });
+
+  return json({ narrative: { ...payload, analysis, analysisError } });
 }
 
 async function getStock(symbol: string): Promise<StockRow | undefined> {

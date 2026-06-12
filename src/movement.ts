@@ -7,6 +7,7 @@ import {
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { cleanSymbol, error, json, nowIso, requireBearerToken } from "./http";
+import { safeAnalyze } from "./claude";
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -315,7 +316,14 @@ export async function movement(event: APIGatewayProxyEventV2): Promise<APIGatewa
     summary
   };
 
-  return json({ movement: payload });
+  const { analysis, analysisError } = await safeAnalyze({
+    system:
+      "You are a markets analyst explaining a stock's price movement over a specific interval, integrating regime, market-pulse, alignment, and predictive-news signals. Be specific and quantitative; never invent figures.",
+    instruction: `Write a 2-3 paragraph movement analysis for ${symbol} over the ${interval} interval, then end with a one-line directional lean and its key risk.`,
+    context: payload
+  });
+
+  return json({ movement: { ...payload, analysis, analysisError } });
 }
 
 async function getStock(symbol: string): Promise<StockRow | undefined> {

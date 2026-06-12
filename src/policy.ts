@@ -3,6 +3,8 @@ import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { json, nowIso, requireBearerToken } from "./http";
+import { safeAnalyze } from "./claude";
+import { fetchLatestFinancialPolicy, type FinancialPolicy } from "./financialPolicy";
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -148,21 +150,23 @@ type PolicyPrediction = {
       themes: string[];
     }>;
   };
+  financialPolicy: FinancialPolicy | null;
 };
 
 export async function prediction(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const unauthorized = requireBearerToken(event);
   if (unauthorized) return unauthorized;
 
-  const [latestSnapshot, previousSnapshot, latestAlignment] = await Promise.all([
+  const [latestSnapshot, previousSnapshot, latestAlignment, financialPolicy] = await Promise.all([
     fetchLatestPulseSnapshot(),
     fetchPreviousPulseSnapshot(),
-    fetchLatestAlignment()
+    fetchLatestAlignment(),
+    fetchLatestFinancialPolicy()
   ]);
 
   if (!latestSnapshot) {
     return json({
-      prediction: emptyPrediction()
+      prediction: { ...emptyPrediction(), financialPolicy }
     });
   }
 
@@ -186,10 +190,19 @@ export async function prediction(event: APIGatewayProxyEventV2): Promise<APIGate
       regions: regionCards.map((card) => ({ name: card.name, status: card.status, trend: card.trend }))
     },
     regions: regionCards,
-    marketImpact
+    marketImpact,
+    financialPolicy
   };
 
-  return json({ prediction: payload });
+  const { analysis, analysisError } = await safeAnalyze({
+    system:
+      "You are a geopolitical and macro-policy analyst. From the market-pulse and alignment data, write a forward-looking read on policy and risk and its likely market impact. Be specific; never invent figures.",
+    instruction:
+      "Write a concise global policy-and-risk prediction: the overall risk read, the most important regional highlights, and the likely market impact.",
+    context: payload
+  });
+
+  return json({ prediction: { ...payload, analysis, analysisError } });
 }
 
 async function fetchLatestPulseSnapshot(): Promise<PulseSnapshot | undefined> {
@@ -577,7 +590,8 @@ function emptyPrediction(): PolicyPrediction {
       themes: [],
       sectorsToWatch: [],
       sourceHeadlines: []
-    }
+    },
+    financialPolicy: null
   };
 }
 

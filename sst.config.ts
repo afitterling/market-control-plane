@@ -12,13 +12,26 @@ export default $config({
     const apiBearerToken = new sst.Secret("API_BEARER_TOKEN");
     const fmpApiKey = new sst.Secret("FMP_API_KEY");
     const pulseRefreshToken = new sst.Secret("PULSE_REFRESH_TOKEN");
+    // Claude API key powering the AI endpoints (assessments, narrative, movement,
+    // policy). Loaded from .env.local via `npm run secrets:load`.
+    const anthropicApiKey = new sst.Secret("ANTHROPIC_API_KEY");
 
     const stocks = new sst.aws.Dynamo("Stocks", {
       fields: {
-        symbol: "string"
+        symbol: "string",
+        // Constant value ("STOCK") on every row so the whole symbol list can be
+        // read with a Query instead of a Scan. See src/stocksTable.ts.
+        gsiSymbols: "string"
       },
       primaryIndex: {
         hashKey: "symbol"
+      },
+      globalIndexes: {
+        BySymbolList: {
+          hashKey: "gsiSymbols",
+          rangeKey: "symbol",
+          projection: "keys-only"
+        }
       }
     });
 
@@ -84,6 +97,17 @@ export default $config({
       }
     });
 
+    const financialPolicyCache = new sst.aws.Dynamo("FinancialPolicyCache", {
+      fields: {
+        scope: "string",
+        generatedAt: "string"
+      },
+      primaryIndex: {
+        hashKey: "scope",
+        rangeKey: "generatedAt"
+      }
+    });
+
     const marketRegime = new sst.aws.Dynamo("MarketRegime", {
       fields: {
         scale: "string",
@@ -117,10 +141,21 @@ export default $config({
 
     const wsConnections = new sst.aws.Dynamo("WsConnections", {
       fields: {
-        connectionId: "string"
+        connectionId: "string",
+        // One item per (connectionId, channel) subscription so broadcasts can
+        // Query the ByChannel index for exactly the subscribers on a channel
+        // instead of scanning the whole connection table on every event.
+        channel: "string"
       },
       primaryIndex: {
-        hashKey: "connectionId"
+        hashKey: "connectionId",
+        rangeKey: "channel"
+      },
+      globalIndexes: {
+        ByChannel: {
+          hashKey: "channel",
+          rangeKey: "connectionId"
+        }
       }
     });
 
@@ -181,6 +216,15 @@ export default $config({
       }
     });
 
+    new sst.aws.Cron("GenerateFinancialPolicy", {
+      schedule: $dev ? "rate(15 minutes)" : "rate(1 hour)",
+      function: {
+        handler: "src/financialPolicy.generate",
+        link: [marketPulseSnapshot, financialPolicyCache, anthropicApiKey],
+        timeout: "5 minutes"
+      }
+    });
+
     new sst.aws.Cron("RefreshStockHistoricals", {
       schedule: "rate(1 day)",
       function: {
@@ -220,6 +264,7 @@ export default $config({
         signalAlerts,
         marketPulse,
         marketPulseSnapshot,
+        financialPolicyCache,
         marketRegime,
         marketAlignment,
         industries,
@@ -227,6 +272,7 @@ export default $config({
         apiBearerToken,
         fmpApiKey,
         pulseRefreshToken,
+        anthropicApiKey,
         ticksStream,
         signalsStream,
         pulseEventsStream
@@ -262,6 +308,7 @@ export default $config({
     api.route("POST /assessments/{strategy}/{narrative}", "src/assessments.assess");
     api.route("POST /stocks", "src/stocks.create");
     api.route("POST /stocks/batch", "src/stocks.batchCreate");
+    api.route("POST /stocks/backfill", "src/stocks.backfillSymbolIndex");
 
     api.route("GET /earnings/{symbol}", "src/earnings.list");
 

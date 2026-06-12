@@ -7,7 +7,7 @@
   "author": "Alex Fitterling",
   "scripts": {
     "setup": "npx sst install",
-    "secrets:load": "npx sst secret load .env",
+    "secrets:load": "npx sst secret load .env.local",
     "dev": "npm run secrets:load && npx sst dev",
     "deploy": "npm run secrets:load && npx sst deploy",
     "logs": "npx sst logs --stage dev",
@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@aws-sdk/client-apigatewaymanagementapi": "^3.808.0",
     "@aws-sdk/client-dynamodb": "^3.808.0",
     "@aws-sdk/client-kinesis": "^3.808.0",

@@ -1,7 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { Resource } from "sst";
 import { nowIso } from "./http";
+import { STOCK_LIST_INDEX, STOCK_LIST_PK, STOCK_LIST_PK_VALUE } from "./stocksTable";
 import { putTicks } from "./streams";
 
 const PASSES_PER_INVOCATION = 2;
@@ -81,9 +82,12 @@ async function listStockSymbols(): Promise<string[]> {
   let exclusiveStartKey: Record<string, unknown> | undefined;
   do {
     const response = await documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: Resource.Stocks.name,
-        ProjectionExpression: "symbol",
+        IndexName: STOCK_LIST_INDEX,
+        KeyConditionExpression: "#pk = :pk",
+        ExpressionAttributeNames: { "#pk": STOCK_LIST_PK },
+        ExpressionAttributeValues: { ":pk": STOCK_LIST_PK_VALUE },
         ExclusiveStartKey: exclusiveStartKey
       })
     );

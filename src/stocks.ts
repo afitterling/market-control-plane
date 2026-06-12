@@ -6,12 +6,14 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
-  ScanCommand
+  ScanCommand,
+  UpdateCommand
 } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { publishEvent } from "./events";
 import { cleanSymbol, error, json, nowIso, parseJsonBody, requireBearerToken } from "./http";
+import { STOCK_LIST_INDEX, STOCK_LIST_PK, STOCK_LIST_PK_VALUE } from "./stocksTable";
 
 const STOCK_NEW_ADDED_ACTION = "STCO_NEW_ADDED";
 const STOCK_PROCESS_ACTION = "STCO_PROCESS_STOCK";
@@ -41,6 +43,8 @@ type StockItem = {
   updatedAt: string;
   processingState?: ProcessingState;
   executedActions?: ExecutedAction[];
+  /** Constant partition key for the BySymbolList index; stamped at write time. */
+  gsiSymbols?: string;
 };
 
 type ProfileLookup = {
@@ -84,6 +88,60 @@ export async function list(event: APIGatewayProxyEventV2): Promise<APIGatewayPro
     count: stocks.length,
     stocks
   });
+}
+
+// One-time migration: stamp the BySymbolList partition key onto pre-existing
+// rows so they appear in the index. Idempotent — already-stamped rows are
+// skipped via the condition. Run once after deploying the index.
+export async function backfillSymbolIndex(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const unauthorized = requireBearerToken(event);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
+  let scanned = 0;
+  let stamped = 0;
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const response = await documentClient.send(
+      new ScanCommand({
+        TableName: Resource.Stocks.name,
+        ProjectionExpression: "symbol",
+        ExclusiveStartKey: exclusiveStartKey
+      })
+    );
+    const items = (response.Items ?? []) as { symbol?: string }[];
+    scanned += items.length;
+    for (const item of items) {
+      if (!item.symbol) {
+        continue;
+      }
+      try {
+        await documentClient.send(
+          new UpdateCommand({
+            TableName: Resource.Stocks.name,
+            Key: { symbol: item.symbol },
+            ConditionExpression: "attribute_exists(symbol) AND attribute_not_exists(#pk)",
+            UpdateExpression: "SET #pk = :pk",
+            ExpressionAttributeNames: { "#pk": STOCK_LIST_PK },
+            ExpressionAttributeValues: { ":pk": STOCK_LIST_PK_VALUE }
+          })
+        );
+        stamped += 1;
+      } catch (cause) {
+        if (!isConditionalCheckFailed(cause)) {
+          throw cause;
+        }
+      }
+    }
+    exclusiveStartKey = response.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+
+  return json({ index: STOCK_LIST_INDEX, scanned, stamped });
+}
+
+function isConditionalCheckFailed(cause: unknown): boolean {
+  return (cause as { name?: string })?.name === "ConditionalCheckFailedException";
 }
 
 export async function get(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
@@ -272,9 +330,14 @@ async function putStock(stock: StockItem): Promise<void> {
   await documentClient.send(
     new PutCommand({
       TableName: Resource.Stocks.name,
-      Item: stock
+      Item: withSymbolIndex(stock)
     })
   );
+}
+
+/** Stamp the constant partition key that places a row in the BySymbolList index. */
+function withSymbolIndex(stock: StockItem): StockItem {
+  return { ...stock, [STOCK_LIST_PK]: STOCK_LIST_PK_VALUE };
 }
 
 async function getStocksBySymbol(symbols: string[]): Promise<Map<string, StockItem>> {
@@ -310,7 +373,7 @@ async function batchPutStocks(stocks: StockItem[]): Promise<void> {
     let requestItems = {
       [Resource.Stocks.name]: stocks.slice(index, index + 25).map((stock) => ({
         PutRequest: {
-          Item: stock
+          Item: withSymbolIndex(stock)
         }
       }))
     };
