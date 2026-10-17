@@ -7,7 +7,7 @@ import {
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { Resource } from "sst";
 import { cleanSymbol, error, json, nowIso, requireBearerToken } from "./http";
-import { safeAnalyze } from "./claude";
+import { complete, safeAnalyze } from "./claude";
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const PULSE_SCOPE = "global";
@@ -159,14 +159,63 @@ export async function narrative(event: APIGatewayProxyEventV2): Promise<APIGatew
     drivers
   };
 
-  const { analysis, analysisError } = await safeAnalyze({
-    system:
-      "You are an equity analyst writing a concise, plain-English narrative for a single stock. Explain what moved the stock over the window and how it sits relative to its sector and the broader market regime. Be specific and quantitative; never invent figures.",
-    instruction: `Write a 2-3 paragraph narrative for ${symbol} covering the ${days}-day window: the move itself, sector alignment, and the market backdrop.`,
-    context: payload
-  });
+  const [{ analysis, analysisError }, { businessModel, businessModelError }] = await Promise.all([
+    safeAnalyze({
+      system:
+        "You are an equity analyst writing a concise, plain-English narrative for a single stock. Explain what moved the stock over the window and how it sits relative to its sector and the broader market regime. Be specific and quantitative; never invent figures.",
+      instruction: `Write a 2-3 paragraph narrative for ${symbol} covering the ${days}-day window: the move itself, sector alignment, and the market backdrop.`,
+      context: payload
+    }),
+    analyzeBusinessModel(payload)
+  ]);
 
-  return json({ narrative: { ...payload, analysis, analysisError } });
+  return json({
+    narrative: { ...payload, analysis, analysisError, businessModel, businessModelError }
+  });
+}
+
+/**
+ * Second narrative rubric: a plain-English read on the company's business model
+ * and the outlook for that model. Qualitative by design — grounded in the
+ * sector/industry/margin profile rather than the price window. Written in English.
+ * Degrades to a null section with an error note instead of throwing so the
+ * endpoint still returns the computed context and the market narrative.
+ */
+async function analyzeBusinessModel(
+  payload: Narrative
+): Promise<{ businessModel: string | null; businessModelError: string | null }> {
+  try {
+    const businessModel = await complete({
+      system:
+        "You are an equity analyst explaining a company's business model and the outlook for that model in clear, plain English. First explain how the company makes money: its core products or services, who its customers are, its revenue model, and the key economic drivers. Then assess the outlook for that model: structural tailwinds and headwinds, competitive positioning and moat, and how durable the economics look. Ground qualitative claims in the sector, industry, and margin profile provided; never invent precise financial figures.",
+      prompt: [
+        `Write a two-part business-model section for ${payload.name ?? payload.symbol} (${payload.symbol}). Respond in English.`,
+        "",
+        "**Business Model** — one paragraph on how the company generates revenue and what drives its unit economics.",
+        "**Outlook** — one paragraph assessing the prospects of that business model: tailwinds, headwinds, competitive moat, and durability.",
+        "",
+        "Use the context below for grounding. Do not fabricate exact figures; if a driver is not evident from the context, reason from the sector and industry instead.",
+        "",
+        "## Context (JSON)",
+        JSON.stringify(
+          {
+            symbol: payload.symbol,
+            name: payload.name,
+            sector: payload.sector,
+            industry: payload.industry,
+            fundamentals: payload.fundamentals,
+            margins: payload.margins
+          },
+          null,
+          2
+        )
+      ].join("\n")
+    });
+    return { businessModel, businessModelError: null };
+  } catch (cause) {
+    console.error("narrative.analyzeBusinessModel failed", { cause });
+    return { businessModel: null, businessModelError: "Business-model inference failed; returning computed context only." };
+  }
 }
 
 async function getStock(symbol: string): Promise<StockRow | undefined> {
